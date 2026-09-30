@@ -20,7 +20,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} والتقاط صورة للشاشة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وإزالة نافذة تسجيل الدخول...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -32,7 +32,19 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(5000)
+            
+            # الانتظار قليلاً حتى تظهر النافذة المزعجة
+            await page.wait_for_timeout(4000)
+            
+            # محاولة النقر على زر الإغلاق (X) إذا ظهرت النافذة
+            try:
+                # زر الإغلاق في انستغرام غالباً يكون عبارة عن زر أو أيقونة SVG داخل النافذة المنبثقة
+                close_button = page.locator("div[role='dialog'] svg[aria-label='Close'], button:has(svg[aria-label='Close'])")
+                if await close_button.is_visible(timeout=3000):
+                    await close_button.click()
+                    await page.wait_for_timeout(1000) # انتظار حتى تختفي النافذة
+            except Exception:
+                pass # لو لم تظهر النافذة، يكمل البوت بشكل طبيعي بدون مشاكل
             
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
@@ -60,7 +72,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن ومزود بميزة التقاط الصور...")
+    print("البوت يعمل الآن ومزود بميزة إغلاق النوافذ المنبثقة...")
     app.run_polling()
 
 if __name__ == "__main__":
