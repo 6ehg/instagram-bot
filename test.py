@@ -20,7 +20,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وإزالة نافذة تسجيل الدخول...")
+    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وتجاوز النوافذ المزعجة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -33,18 +33,26 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار قليلاً حتى تظهر النافذة المزعجة
+            # الانتظار حتى تظهر الصفحة والنافذة المنبثقة
             await page.wait_for_timeout(4000)
             
-            # محاولة النقر على زر الإغلاق (X) إذا ظهرت النافذة
+            # إخفاء النافذة المنبثقة وإزالة التعتيم عن الخلفية باستخدام جافا سكريبت برمجياً
             try:
-                # زر الإغلاق في انستغرام غالباً يكون عبارة عن زر أو أيقونة SVG داخل النافذة المنبثقة
-                close_button = page.locator("div[role='dialog'] svg[aria-label='Close'], button:has(svg[aria-label='Close'])")
-                if await close_button.is_visible(timeout=3000):
-                    await close_button.click()
-                    await page.wait_for_timeout(1000) # انتظار حتى تختفي النافذة
+                await page.evaluate("""() => {
+                    // إزالة النافذة نفسها
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => el.remove());
+                    
+                    // إزالة طبقة التعتيم الخلفية (Backdrop) إن وجدت
+                    const backdrops = document.querySelectorAll("div._a23z");
+                    backdrops.forEach(el => el.remove());
+                    
+                    // إعادة تفعيل التمرير في الصفحة الرئيسية
+                    document.body.style.overflow = 'auto';
+                }""")
+                await page.wait_for_timeout(1000)
             except Exception:
-                pass # لو لم تظهر النافذة، يكمل البوت بشكل طبيعي بدون مشاكل
+                pass
             
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
@@ -72,7 +80,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن ومزود بميزة إغلاق النوافذ المنبثقة...")
+    print("البوت يعمل الآن ومزود بميزة تنظيف الصفحة...")
     app.run_polling()
 
 if __name__ == "__main__":
