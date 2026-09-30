@@ -8,8 +8,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "أهلاً بك في بوت مراقبة إنستغرام الاحترافي! 🕵️‍♂️\n\n"
         "لأخذ لقطة شاشة وفحص أي حساب، أرسل الأمر هكذا:\n"
-        "/track username\n\n"
-        "مثال:\n/track elonmusk"
+        "/track username"
     )
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -20,7 +19,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} ومنح الوقت الكافي لتحميل البيانات...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وإغلاق النافذة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -33,22 +32,28 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # 1. إغلاق النافذة المنبثقة فوراً
+            # الانتظار حتى تظهر النافذة المنبثقة
+            await page.wait_for_timeout(3000)
+            
+            # محاولة النقر الفعلي على زر الـ (X) لإغلاق النافذة تماماً كأنها حقيقة
             try:
+                # البحث عن زر الإغلاق الذي يحتوي على علامة X أو زر القفل الخاص بالنافذة
+                close_btn = page.locator("div[role='dialog'] button, svg[aria-label='Close']").first
+                if await close_btn.is_visible():
+                    await close_btn.click()
+                    await page.wait_for_timeout(1000) # الانتظار ثانية لاختفاء النافذة
+            except Exception:
+                # لو لم يجد الزر، نقوم بإزالتها برمجياً كاحتياط
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
                     dialogs.forEach(el => el.remove());
-                    const backdrops = document.querySelectorAll("div._a23z");
-                    backdrops.forEach(el => el.remove());
                     document.body.style.overflow = 'auto';
                 }""")
-            except Exception:
-                pass
             
-            # 2. زيادة وقت الانتظار لضمان اكتمال ظهور المتابعين والصورة الشخصية تماماً
-            await page.wait_for_timeout(3500)
+            # فترة استقرار قصيرة جداً لضمان ظهور كل بيانات الحساب
+            await page.wait_for_timeout(1000)
             
-            # 3. التقاط الصورة وإرسالها
+            # التقاط الصورة وإرسالها نظيفة
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -59,7 +64,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=f"📸 لقطة شاشة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
+                caption=f"📸 لقطة شاشة نظيفة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
             )
             
         await status_message.delete()
@@ -75,7 +80,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بالوقت المعدل...")
+    print("البوت يعمل الآن بضرورة النقر على زر الإغلاق...")
     app.run_polling()
 
 if __name__ == "__main__":
