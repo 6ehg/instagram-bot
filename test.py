@@ -20,7 +20,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وإغلاق النوافذ المنبثقة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وإزالة النوافذ بدقة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -33,28 +33,35 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تظهر النافذة المنبثقة أو الصفحة
-            await page.wait_for_timeout(4000)
+            # الانتظار حتى تحميل عناصر الصفحة الأولية
+            await page.wait_for_timeout(3000)
             
-            # محاولة إغلاق النافذة المنبثقة والانتظار بعدها ثانية تماماً مثلما طلبات
-            try:
-                await page.evaluate("""() => {
-                    // البحث عن زر الإغلاق (X) أو النافذة وإزالتها
+            # إغلاق النافذة المنبثقة والتأكد من اختفائها تماماً قبل التقاط الصورة
+            await page.evaluate("""async () => {
+                const removeDialogs = () => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
                     dialogs.forEach(el => el.remove());
                     
-                    // إزالة طبقة التعتيم وإعادة التمرير
                     const backdrops = document.querySelectorAll("div._a23z");
                     backdrops.forEach(el => el.remove());
+                    
                     document.body.style.overflow = 'auto';
-                }""")
+                };
                 
-                # الانتظار لمدة ثانية واحدة تماماً بعد الإغلاق
-                await page.wait_for_timeout(1000)
+                // تنفيذ الإزالة فوراً
+                removeDialogs();
+            }""")
+            
+            # الانتظار بذكاء حتى تختفي النافذة نهائياً من DOM وتصبح الصفحة جاهزة طوالي
+            try:
+                await page.wait_for_selector("div[role='dialog']", state="detached", timeout=5000)
             except Exception:
                 pass
             
-            # التقاط الصورة بعد إغلاق النافذة واستقرار الصفحة
+            # فترة استقرار قصيرة جداً (0.5 ثانية) لضمان ظهور المتابعين وكل البيانات بوضوح
+            await page.wait_for_timeout(500)
+            
+            # التقاط الصورة طوالي وبكل وضوح
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -65,7 +72,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=f"📸 لقطة شاشة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
+                caption=f"📸 لقطة شاشة دقيقة للحساب: @{username}\n⏱️️ استغرقت العملية: {duration} ثانية"
             )
             
         await status_message.delete()
@@ -81,7 +88,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن وجاهز لإغلاق النوافذ والانتظار...")
+    print("البوت يعمل الآن بذكاء إغلاق النوافذ والتقاط الصورة فوراً...")
     app.run_polling()
 
 if __name__ == "__main__":
