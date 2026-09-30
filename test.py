@@ -6,8 +6,8 @@ from playwright.async_api import async_playwright
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "أهلاً بك في بوت مراقبة إنستغرام الاحترافي! 🕵️‍♂️\n\n"
-        "لأخذ لقطة شاشة وفحص أي حساب، أرسل الأمر هكذا:\n"
+        "أهلاً بك في بوت مراقبة إنستغرام المطور! 🕵️‍♂️✨\n\n"
+        "لأخذ لقطة شاشة ومعرفة معلومات الحساب، أرسل الأمر هكذا:\n"
         "/track username\n\n"
         "مثال:\n/track elonmusk"
     )
@@ -20,7 +20,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وإزالة نافذة تسجيل الدخول...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} واستخراج المعلومات...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -33,30 +33,53 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار قليلاً حتى تظهر النافذة المزعجة
-            await page.wait_for_timeout(4000)
+            # نفس الوقت المستقر الذي نجح معك سابقاً لضمان تحميل الصفحة
+            await page.wait_for_timeout(6000)
             
-            # محاولة النقر على زر الإغلاق (X) إذا ظهرت النافذة
-            try:
-                # زر الإغلاق في انستغرام غالباً يكون عبارة عن زر أو أيقونة SVG داخل النافذة المنبثقة
-                close_button = page.locator("div[role='dialog'] svg[aria-label='Close'], button:has(svg[aria-label='Close'])")
-                if await close_button.is_visible(timeout=3000):
-                    await close_button.click()
-                    await page.wait_for_timeout(1000) # انتظار حتى تختفي النافذة
-            except Exception:
-                pass # لو لم تظهر النافذة، يكمل البوت بشكل طبيعي بدون مشاكل
+            # استخراج معلومات الحساب برمجياً من الصفحة
+            profile_info = await page.evaluate("""() => {
+                try {
+                    // استخراج المنشورات والمتابعين والمتابَعين من عناصر الـ meta أو الصفحة
+                    const metaDes = document.querySelector('meta[property="og:description"]');
+                    let text = metaDes ? metaDes.content : "";
+                    
+                    // التحقق من وجود علامة التوثيق الزرقاء
+                    const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
+                    
+                    return {
+                        description: text,
+                        verified: isVerified
+                    };
+                } catch (e) {
+                    return { description: "غير متوفر", verified: false };
+                }
+            }""")
             
+            # التقاط الصورة
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
         end_time = datetime.now()
         duration = (end_time - start_time).seconds
         
+        # تنسيق معلومات الحساب لإرسالها بشكل أنيق
+        desc = profile_info.get("description", "لا توجد تفاصيل")
+        verified_badge = "✅ نعم (موثق)" if profile_info.get("verified") else "❌ لا (غير موثق)"
+        
+        caption = (
+            f"👤 معلومات حساب إنستغرام: @{username}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 التفاصيل: {desc}\n"
+            f"🏅 حالة التوثيق: {verified_badge}\n"
+            f"⏱️ استغرقت العملية: {duration} ثانية"
+        )
+        
         with open(screenshot_path, "rb") as photo:
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=f"📸 لقطة شاشة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
+                caption=caption,
+                parse_mode="Markdown"
             )
             
         await status_message.delete()
@@ -72,7 +95,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن ومزود بميزة إغلاق النوافذ المنبثقة...")
+    print("البوت المطور يعمل الآن...")
     app.run_polling()
 
 if __name__ == "__main__":
