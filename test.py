@@ -95,7 +95,8 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
         )
 
         wih open(sreenshot_path,  "rb") 
-        as photo:await context.bot.send_photo(
+        as photo:
+        await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
                 caption=caption,
