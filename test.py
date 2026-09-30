@@ -19,44 +19,44 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وإزالة النوافذ بقوة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} بدقة واستقرار...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
     
     try:
         async with async_playwright() as p:
+            # تشغيل متصفح بحجم شاشة كبير جداً لضمان ظهور كافة عناصر الحساب بوضوح
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
-            page = await browser.new_page(viewport={"width": 1280, "height": 800})
+            page = await browser.new_page(viewport={"width": 1440, "height": 900})
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تبدأ الصفحة بالظهور
-            await page.wait_for_timeout(3000)
+            # منح الوقت الكافي والمناسب لتحميل الصفحة بالكامل (6 ثوانٍ تماماً)
+            await page.wait_for_timeout(6000)
             
-            # حقن سكريبت قوي يقوم بإبادة وحذف أي نافذة تسجيل دخول أو تعتيم فوراً من الجذور
+            # إخفاء النافذة برمجياً بطريقة سلسة لا تؤثر على شكل الحساب الأساسي
             try:
                 await page.evaluate("""() => {
-                    // حذف أي عنصر يحتوي على خاصية dialog (النافذة المزعجة)
-                    const dialogs = document.querySelectorAll("div[role='dialog'], div.x1n2onr6.x1ja2u2z");
-                    dialogs.forEach(el => el.remove());
-                    
-                    // حذف خلفية التعتيم السوداء
-                    const backdrops = document.querySelectorAll("div._a23z, div.x1ypdohk");
-                    backdrops.forEach(el => el.remove());
-                    
-                    // إعادة التمرير وإلغاء القفل عن الصفحة
+                    // محاولة إخفاء النافذة المنبثقة عبر تعديل الشفافية والعرض لتجنب انهيار الصفحة
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => {
+                        el.style.display = 'none';
+                    });
+                    const backdrops = document.querySelectorAll("div._a23z");
+                    backdrops.forEach(el => {
+                        el.style.display = 'none';
+                    });
                     document.body.style.overflow = 'auto';
-                    document.documentElement.style.overflow = 'auto';
                 }""")
             except Exception:
                 pass
             
-            # مهلة قصيرة جداً لاستقرار الصفحة بعد الحذف
+            # استقرار قصير بعد التعديل
             await page.wait_for_timeout(1000)
             
-            # التقاط الصورة نظيفة تماماً
+            # التقاط الصورة وإرسالها
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -67,7 +67,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=f"📸 لقطة شاشة نظيفة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
+                caption=f"📸 لقطة شاشة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
             )
             
         await status_message.delete()
@@ -83,7 +83,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بآلية الحذف القوي للنوافذ...")
+    print("البوت يعمل الآن بوضع الاستقرار والتعديل السلس...")
     app.run_polling()
 
 if __name__ == "__main__":
