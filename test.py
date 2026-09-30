@@ -19,7 +19,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وتجاوز النافذة بدقة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وإغلاق النافذة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -29,31 +29,21 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
             page = await browser.new_page(viewport={"width": 1280, "height": 800})
             
-            # حقن سكريبت يراقب ظهور النافذة ويقوم بحذفها فوراً قبل حتى أن ترسم نفسها على الشاشة
-            await page.add_init_script("""() => {
-                const observer = new MutationObserver((mutations) => {
-                    const dialogs = document.querySelectorAll("div[role='dialog']");
-                    dialogs.forEach(el => el.remove());
-                });
-                observer.observe(document, { childList: true, subtree: true });
-            }""")
-            
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تستقر الصفحة بالكامل (6 ثوانٍ)
-            await page.wait_for_timeout(6000)
+            # الانتظار حتى تظهر النافذة تماماً
+            await page.wait_for_timeout(4000)
             
-            # مسح إضافي يدوي للتأكد من نظافة الشاشة
-            try:
-                await page.evaluate("""() => {
-                    document.querySelectorAll("div[role='dialog']").forEach(el => el.remove());
-                    document.body.style.overflow = 'auto';
-                }""")
-            except Exception:
-                pass
+            # الحل القاطع: الضغط على زر الـ Escape من لوحة المفاتيح لإغلاق أي نافذة منبثقة فوراً
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(1000)
             
-            # استخراج معلومات الحساب وحالة التوثيق
+            # محاولة ثانية بالضغط في مكان فارغ بالشاشة (الإحداثيات 100, 100) لضمان إغلاق أي خلفية
+            await page.mouse.click(100, 100)
+            await page.wait_for_timeout(1500)
+            
+            # استخراج معلومات الحساب وحالة التوثيق بدقة
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -65,7 +55,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             }""")
             
-            # التقاط الصورة نظيفة
+            # التقاط لقطة الشاشة وهي نظيفة وخالية من النوافذ
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -95,16 +85,17 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await status_message.edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
-TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
+
+def main():
+    TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
     
     app = ApplicationBuilder().token(TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بمرقبة وإزالة النوافذ تلقائياً...")
+    print("البوت يعمل الآن بوضع إغلاق النوافذ عبر زر Escape...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-def main():
