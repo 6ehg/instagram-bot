@@ -95,7 +95,8 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
         await status_message.delete()
-        edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
+        
+    except Exception as e:edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
 
 def main():
     TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
@@ -110,5 +111,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    except Exception as e:
         await status_message.
