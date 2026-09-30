@@ -26,7 +26,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     screenshot_path = f"{username}.png"
     
     try:
-        # تم تعديل headless إلى True لكي يعمل بسلاسة على السيرفر السحابي بدون شاشة
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
             page = await browser.new_page(viewport={"width": 1280, "height": 800})
@@ -54,7 +53,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_message.edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
 
 def main():
-    # توكن البوت الخاص بك
     TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
     
     app = ApplicationBuilder().token(TOKEN).build()
