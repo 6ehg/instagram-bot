@@ -20,33 +20,37 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} والتقاط صورة واضحة...")
+    status_message = await update.message.reply_text(f"🔍 جاري ضبط الألوان وإلتقاط صورة واضحة لحساب @{username}...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
     
     try:
         async with async_playwright() as p:
-            # تم إضافة color_scheme="light" هنا لجعل الموقع يفتح بالوضع الفاتح الواضح
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
             context_browser = await browser.new_context(
                 viewport={"width": 1280, "height": 800},
-                color_scheme="light" 
+                color_scheme="light"
             )
             page = await context_browser.new_page()
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تحميل الصفحة بالكامل
+            # الانتظار حتى تحميل الصفحة
             await page.wait_for_timeout(4000)
             
-            # إزالة أي نوافذ منبثقة مزعجة إن وجدت
+            # حقن جافا سكريبت لإزالة الوضع الداكن وإزالة النوافذ المنبثقة
             try:
                 await page.evaluate("""() => {
+                    // إزالة النوافذ المنبثقة لتسجيل الدخول
                     const dialogs = document.querySelectorAll("div[role='dialog']");
                     dialogs.forEach(el => el.remove());
                     document.body.style.overflow = 'auto';
+                    
+                    // فرض الوضع الفاتح على هيكل الصفحة إن وجد
+                    document.documentElement.classList.remove('_aa4d');
+                    document.documentElement.style.colorScheme = 'light';
                 }""")
                 await page.wait_for_timeout(1000)
             except Exception:
@@ -62,7 +66,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=f"📸 لقطة شاشة واضحة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
+                caption=f"📸 لقطة شاشة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
             )
             
         await status_message.delete()
@@ -78,7 +82,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بصيغة الوضع الفاتح الواضح...")
+    print("البوت يعمل الآن بوضع الألوان الفاتحة...")
     app.run_polling()
 
 if __name__ == "__main__":
