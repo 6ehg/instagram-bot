@@ -7,12 +7,11 @@ from playwright.async_api import async_playwright
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "أهلاً بك في بوت مراقبة إنستغرام الذكي والمطور! 🕵️‍♂️✨\n\n"
-        "لأخذ لقطة شاشة ومراقبة الحسابات، أرسل الأمر هكذا:\n"
-        "/track username\n\n"
-        "*(لو الحساب غير موجود، سيراقبه البوت في الخلفية ويحسب لك كم غاب وكم استغرق بالفحص حتى ظهر!)*"
+        "لأخذ لقطة شاشة صافية ومراقبة الحسابات، أرسل الأمر هكذا:\n"
+        "/track username"
     )
 
-# دالة مسؤولة عن فحص الحساب واستخراج البيانات
+# دالة مسؤولة عن فحص الحساب واستخراج البيانات وصناعة صورة صافية
 async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
     screenshot_path = f"{username}.png"
     try:
@@ -27,20 +26,33 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
                 await browser.close()
                 return False
             
-            await page.wait_for_timeout(4000)
+            # زيادة وقت الانتظار قليلاً لتحميل كافة عناصر الصفحة بدقة
+            await page.wait_for_timeout(5000)
             
-            # إغلاق النافذة المنبثقة
+            # إزالة النوافذ المنبثقة وطبقات التعتيم الباهتة بالقوة من الجذور
             try:
                 await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z");
+                    // إزالة أي نافذة منبثقة أو طبقة عتمة رمادية
+                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z, div._a8k-");
                     dialogs.forEach(el => el.remove());
+                    
+                    // إعادة التمرير وإزالة أي تأثير باهت على الخلفية
                     document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
+                    
+                    // إزالة الطبقات السوداء/الرمادية الشفافة التي تغطي الشاشة
+                    const overlays = document.querySelectorAll("div[style*='background-color'], div[class*='overlay']");
+                    overlays.forEach(el => {
+                        if (window.getComputedStyle(el).position === 'fixed') {
+                            el.remove();
+                        }
+                    });
                 }""")
             except Exception:
                 pass
             
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(2000)
             
             # التحقق إذا كانت الصفحة غير متوفرة
             is_not_found = await page.evaluate("""() => {
@@ -64,7 +76,7 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
                 }
             }""")
             
-            # التقاط الصورة
+            # التقاط الصورة بجودة عالية ووضوح تام بدون بهتان
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -72,45 +84,42 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
         found_time = datetime.now()
         total_duration = found_time - start_time
         
-        # تحويل الفارق الزمني إلى ساعات ودقائق وثوانٍ بشكل مقروء
         hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
         minutes, seconds = divmod(remainder, 60)
         
-        time_str = ""
-        if hours > 0:
+        time_str = ""if hours > 0:
             time_str += f"{hours} ساعة و "
         if minutes > 0:
             time_str += f"{minutes} دقيقة و "
         time_str += f"{seconds} ثانية"
         
         desc = profile_info.get("description", "لا توجد تفاصيل")
-        verified_badge = "✅ نعم (موثق)" if profile_info.get("verified") else "❌ لا (غير موثق)"
+        verified_badge = "نعم (موثق)" if profile_info.get("verified") else "لا (غير موثق)"
         
         caption = (
-            f"🎉 تنبيه: ظهر الحساب وتم التقاطه! @{username}\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 التفاصيل: {desc}\n"
-            f"🏅 حالة التوثيق: {verified_badge}\n"
-            f"⏳ مدة غياب الحساب / وقت الفحص: {time_str}"
+            f"تم العثور على الحساب: @{username}\n"
+            f"-----------------------------------\n"
+            f"التفاصيل: {desc}\n"
+            f"حالة التوثيق: {verified_badge}\n"
+            f"مدة غياب الحساب / وقت الفحص: {time_str}"
         )
         
-        with open(screenshot_path, "rb") as photo:await context.bot.send_photo(
+        with open(screenshot_path, "rb") as photo:
+            await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=caption,
-                parse_mode="Markdown"
+                caption=caption
             )
         return True
         
     except Exception:
         return False
 
-# دالة المراقبة المستمرة في الخلفية مع توقيت البداية
+# دالة المراقبة المستمرة في الخلفية
 async def background_monitor(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
-    await context.bot.send_message(chat_id=chat_id, text=f"⏳ الحساب @{username} غير موجود حالياً. بدأت مراقبته وسأخبرك فور ظهوره مع حساب المدة!")
+    await context.bot.send_message(chat_id=chat_id, text=f"⏳ الحساب @{username} غير موجود حالياً. بدأت مراقبته وسأخبرك فور ظهوره!")
     
     while True:
-        # فحص كل دقيقتين
         await asyncio.sleep(120)
         found = await check_and_send(context, chat_id, username, start_time)
         if found:
@@ -121,22 +130,20 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
         return
     
+    username = context.args.get("args", [""])[0] if hasattr(context, "args") else context.args[0]
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    # تسجيل وقت بدء الطلب بدقة
     start_time = datetime.now()
     
     status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username}...")
     
-    # محاولة الفحص الفوري
     success = await check_and_send(context, chat_id, username, start_time)
     
     if success:
         await status_message.delete()
     else:
         await status_message.delete()
-        # إطلاق مهمة الخلفية وتمرير وقت البداية معها
         asyncio.create_task(background_monitor(context, chat_id, username, start_time))
 
 def main():
@@ -147,7 +154,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن مع حساب مدد الغياب والمراقبة...")
+    print("البوت يعمل الآن بصور صافية وواضحة...")
     app.run_polling()
 
 if __name__ == "__main__":
