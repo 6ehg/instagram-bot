@@ -20,7 +20,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري ضبط الألوان وإلتقاط صورة واضحة لحساب @{username}...")
+    status_message = await update.message.reply_text(f"🔍 جاري تحسين الإضاءة والتقاط صورة واضحة لحساب @{username}...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -28,19 +28,15 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
-            context_browser = await browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                color_scheme="light"
-            )
-            page = await context_browser.new_page()
+            page = await browser.new_page(viewport={"width": 1280, "height": 800})
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تحميل الصفحة
+            # الانتظار حتى تحميل الصفحة بالكامل
             await page.wait_for_timeout(4000)
             
-            # حقن جافا سكريبت لإزالة الوضع الداكن وإزالة النوافذ المنبثقة
+            # تعديل ألوان الصفحة برمجياً لإزالة السواد وجعلها خلفية بيضاء واضحة
             try:
                 await page.evaluate("""() => {
                     // إزالة النوافذ المنبثقة لتسجيل الدخول
@@ -48,9 +44,20 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     dialogs.forEach(el => el.remove());
                     document.body.style.overflow = 'auto';
                     
-                    // فرض الوضع الفاتح على هيكل الصفحة إن وجد
-                    document.documentElement.classList.remove('_aa4d');
-                    document.documentElement.style.colorScheme = 'light';
+                    // تغيير خلفية الموقع بالكامل إلى الأبيض الساطع وتعديل ألوان النصوص
+                    document.body.style.backgroundColor = '#ffffff';
+                    const mainContainer = document.querySelector('div._aa44');
+                    if (mainContainer) {
+                        mainContainer.style.backgroundColor = '#ffffff';
+                    }
+                    
+                    // تطبيق اللون الأبيض على الخلفيات الداكنة العامة في الصفحة
+                    document.querySelectorAll('*').forEach(el => {
+                        const bg = window.getComputedStyle(el).backgroundColor;
+                        if (bg === 'rgb(0, 0, 0)'  bg === 'rgb(24, 24, 24)'  bg === 'rgb(38, 38, 38)') {
+                            el.style.backgroundColor = '#ffffff';
+                        }
+                    });
                 }""")
                 await page.wait_for_timeout(1000)
             except Exception:
@@ -66,7 +73,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=f"📸 لقطة شاشة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
+                caption=f"📸 لقطة شاشة واضحة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
             )
             
         await status_message.delete()
@@ -82,7 +89,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بوضع الألوان الفاتحة...")
+    print("البوت يعمل الآن ومزود بميزة إزالة السواد وتحسين الإضاءة...")
     app.run_polling()
 
 if __name__ == "__main__":
