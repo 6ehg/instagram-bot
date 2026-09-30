@@ -8,7 +8,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "أهلاً بك في بوت مراقبة إنستغرام الاحترافي! 🕵️‍♂️\n\n"
         "لأخذ لقطة شاشة وفحص أي حساب، أرسل الأمر هكذا:\n"
-        "/track username"
+        "/track username\n\n"
+        "مثال:\n/track elonmusk"
     )
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19,44 +20,32 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} بدقة واستقرار...")
+    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وإزالة نافذة تسجيل الدخول...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
     
     try:
         async with async_playwright() as p:
-            # تشغيل متصفح بحجم شاشة كبير جداً لضمان ظهور كافة عناصر الحساب بوضوح
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
-            page = await browser.new_page(viewport={"width": 1440, "height": 900})
+            page = await browser.new_page(viewport={"width": 1280, "height": 800})
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # منح الوقت الكافي والمناسب لتحميل الصفحة بالكامل (6 ثوانٍ تماماً)
-            await page.wait_for_timeout(6000)
+            # الانتظار قليلاً حتى تظهر النافذة المزعجة
+            await page.wait_for_timeout(4000)
             
-            # إخفاء النافذة برمجياً بطريقة سلسة لا تؤثر على شكل الحساب الأساسي
+            # محاولة النقر على زر الإغلاق (X) إذا ظهرت النافذة
             try:
-                await page.evaluate("""() => {
-                    // محاولة إخفاء النافذة المنبثقة عبر تعديل الشفافية والعرض لتجنب انهيار الصفحة
-                    const dialogs = document.querySelectorAll("div[role='dialog']");
-                    dialogs.forEach(el => {
-                        el.style.display = 'none';
-                    });
-                    const backdrops = document.querySelectorAll("div._a23z");
-                    backdrops.forEach(el => {
-                        el.style.display = 'none';
-                    });
-                    document.body.style.overflow = 'auto';
-                }""")
+                # زر الإغلاق في انستغرام غالباً يكون عبارة عن زر أو أيقونة SVG داخل النافذة المنبثقة
+                close_button = page.locator("div[role='dialog'] svg[aria-label='Close'], button:has(svg[aria-label='Close'])")
+                if await close_button.is_visible(timeout=3000):
+                    await close_button.click()
+                    await page.wait_for_timeout(1000) # انتظار حتى تختفي النافذة
             except Exception:
-                pass
+                pass # لو لم تظهر النافذة، يكمل البوت بشكل طبيعي بدون مشاكل
             
-            # استقرار قصير بعد التعديل
-            await page.wait_for_timeout(1000)
-            
-            # التقاط الصورة وإرسالها
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -83,7 +72,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بوضع الاستقرار والتعديل السلس...")
+    print("البوت يعمل الآن ومزود بميزة إغلاق النوافذ المنبثقة...")
     app.run_polling()
 
 if __name__ == "__main__":
