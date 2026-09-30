@@ -6,65 +6,57 @@ from playwright.async_api import async_playwright
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "أهلاً بك في بوت مراقبة إنستغرام الذكي والمطور! 🕵️‍♂️✨\n\n"
-        "لأخذ لقطة شاشة صافية ومراقبة الحسابات، أرسل الأمر هكذا:\n"
+        "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
+        "لأخذ لقطة شاشة نظيفة ومعرفة معلومات الحساب، أرسل الأمر هكذا:\n"
         "/track username"
     )
 
-# دالة مسؤولة عن فحص الحساب واستخراج البيانات وصناعة صورة صافية
-async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
+async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
+        return
+    
+    username = context.args[0].replace("@", "").strip()
+    chat_id = update.effective_chat.id
+    
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} على سطح المكتب وإغلاق النافذة...")
+    
+    start_time = datetime.now()
     screenshot_path = f"{username}.png"
+    
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
+            # شاشة كمبيوتر مكتبي واسعة ونظامية تماماً
             page = await browser.new_page(viewport={"width": 1280, "height": 800})
             
             url = f"https://www.instagram.com/{username}/"
-            response = await page.goto(url, timeout=60000)
+            await page.goto(url, timeout=60000)
             
-            if response and response.status == 404:
-                await browser.close()
-                return False
+            # الانتظار حتى تظهر الصفحة والنافذة
+            await page.wait_for_timeout(4000)
             
-            # زيادة وقت الانتظار قليلاً لتحميل كافة عناصر الصفحة بدقة
-            await page.wait_for_timeout(5000)
-            
-            # إزالة النوافذ المنبثقة وطبقات التعتيم الباهتة بالقوة من الجذور
+            # إغلاق النافذة المنبثقة وحذفها بالكامل من الشاشة بطريقة برمجية دقيقة
             try:
                 await page.evaluate("""() => {
-                    // إزالة أي نافذة منبثقة أو طبقة عتمة رمادية
-                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z, div._a8k-");
+                    // حذف أي نافذة منبثقة أو طبقة تعتيم سوداء
+                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z");
                     dialogs.forEach(el => el.remove());
                     
-                    // إعادة التمرير وإزالة أي تأثير باهت على الخلفية
+                    // إزالة القفل عن شاشة التمرير
                     document.body.style.overflow = 'auto';
                     document.documentElement.style.overflow = 'auto';
-                    
-                    // إزالة الطبقات السوداء/الرمادية الشفافة التي تغطي الشاشة
-                    const overlays = document.querySelectorAll("div[style*='background-color'], div[class*='overlay']");
-                    overlays.forEach(el => {
-                        if (window.getComputedStyle(el).position === 'fixed') {
-                            el.remove();
-                        }
-                    });
                 }""")
             except Exception:
                 pass
             
+            # ضغطة مفتاح Escape كدعم إضافي لإغلاق أي نافذة متبقية
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(2000)
             
-            # التحقق إذا كانت الصفحة غير متوفرة
-            is_not_found = await page.evaluate("""() => {
-                const bodyText = document.body.innerText;
-                return bodyText.includes("Sorry, this page isn't available.") || bodyText.includes("عذراً، هذه الصفحة غير متوفرة.");
-            }""")
+            # وقت استقرار قصير جداً لضمان صفحة نظيفة 100%
+            await page.wait_for_timeout(1500)
             
-            if is_not_found:
-                await browser.close()
-                return False
-            
-            # استخراج معلومات الحساب
+            # استخراج معلومات الحساب وحالة التوثيق
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -76,75 +68,36 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
                 }
             }""")
             
-            # التقاط الصورة بجودة عالية ووضوح تام بدون بهتان
+            # التقاط الصورة بمقاس الكمبيوتر وبدون نافذة
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
-        # حساب المدة الزمنية منذ لحظة الطلب وحتى ظهور الحساب
-        found_time = datetime.now()
-        total_duration = found_time - start_time
-        
-        hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        
-        time_str = ""if hours > 0:
-            time_str += f"{hours} ساعة و "
-        if minutes > 0:
-            time_str += f"{minutes} دقيقة و "
-        time_str += f"{seconds} ثانية"
+        end_time = datetime.now()
+        duration = (end_time - start_time).seconds
         
         desc = profile_info.get("description", "لا توجد تفاصيل")
-        verified_badge = "نعم (موثق)" if profile_info.get("verified") else "لا (غير موثق)"
+        verified_badge = "✅ نعم (موثق)" if profile_info.get("verified") else "❌ لا (غير موثق)"
         
         caption = (
-            f"تم العثور على الحساب: @{username}\n"
-            f"-----------------------------------\n"
-            f"التفاصيل: {desc}\n"
-            f"حالة التوثيق: {verified_badge}\n"
-            f"مدة غياب الحساب / وقت الفحص: {time_str}"
+            f"👤 معلومات حساب إنستغرام: @{username}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 التفاصيل: {desc}\n"
+            f"🏅 حالة التوثيق: {verified_badge}\n"
+            f"⏱️ استغرقت العملية: {duration} ثانية"
         )
         
         with open(screenshot_path, "rb") as photo:
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=caption
+                caption=caption,
+                parse_mode="Markdown"
             )
-        return True
+            
+        await status_message.delete()
         
-    except Exception:
-        return False
-
-# دالة المراقبة المستمرة في الخلفية
-async def background_monitor(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
-    await context.bot.send_message(chat_id=chat_id, text=f"⏳ الحساب @{username} غير موجود حالياً. بدأت مراقبته وسأخبرك فور ظهوره!")
-    
-    while True:
-        await asyncio.sleep(120)
-        found = await check_and_send(context, chat_id, username, start_time)
-        if found:
-            break
-
-async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
-        return
-    
-    username = context.args.get("args", [""])[0] if hasattr(context, "args") else context.args[0]
-    username = context.args[0].replace("@", "").strip()
-    chat_id = update.effective_chat.id
-    
-    start_time = datetime.now()
-    
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username}...")
-    
-    success = await check_and_send(context, chat_id, username, start_time)
-    
-    if success:
-        await status_message.delete()
-    else:
-        await status_message.delete()
-        asyncio.create_task(background_monitor(context, chat_id, username, start_time))
+    except Exception as e:
+        await status_message.edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
 
 def main():
     TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
@@ -154,7 +107,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بصور صافية وواضحة...")
+    print("البوت يعمل الآن بنظام الكمبيوتر وإغلاق النوافذ...")
     app.run_polling()
 
 if __name__ == "__main__":
