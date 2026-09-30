@@ -6,9 +6,10 @@ from playwright.async_api import async_playwright
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "لأخذ لقطة شاشة نظيفة ومعرفة معلومات الحساب، أرسل الأمر هكذا:\n"
-        "/track username"
+        "أهلاً بك في بوت مراقبة إنستغرام الذكي والمطور! 🕵️‍♂️✨\n\n"
+        "لأخذ لقطة شاشة ومعرفة معلومات الحساب بدقة، أرسل الأمر هكذا:\n"
+        "/track username\n\n"
+        "مثال:\n/track elonmusk"
     )
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19,7 +20,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} على سطح المكتب وإغلاق النافذة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username}، إغلاق النوافذ، واستخراج البيانات...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -27,54 +28,58 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
-            # شاشة كمبيوتر مكتبي واسعة ونظامية تماماً
             page = await browser.new_page(viewport={"width": 1280, "height": 800})
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تظهر الصفحة والنافذة
+            # 1. منح الوقت الأولي لظهور العناصر والنافذة (نفس التوقيت المستقر معك)
             await page.wait_for_timeout(4000)
             
-            # إغلاق النافذة المنبثقة وحذفها بالكامل من الشاشة بطريقة برمجية دقيقة
+            # 2. إخفاء وإغلاق النافذة المنبثقة برمجياً لضمان عدم ظهورها في الصورة
             try:
                 await page.evaluate("""() => {
-                    // حذف أي نافذة منبثقة أو طبقة تعتيم سوداء
-                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z");
-                    dialogs.forEach(el => el.remove());
-                    
-                    // إزالة القفل عن شاشة التمرير
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => {
+                        el.style.display = 'none';
+                    });
+                    const backdrops = document.querySelectorAll("div._a23z");
+                    backdrops.forEach(el => {
+                        el.style.display = 'none';
+                    });
                     document.body.style.overflow = 'auto';
-                    document.documentElement.style.overflow = 'auto';
                 }""")
             except Exception:
                 pass
             
-            # ضغطة مفتاح Escape كدعم إضافي لإغلاق أي نافذة متبقية
-            await page.keyboard.press("Escape")
+            # 3. وقت إضافي بسيط جداً لاستقرار الصفحة بالكامل بعد إخفاء النافذة
+            await page.wait_for_timeout(2000)
             
-            # وقت استقرار قصير جداً لضمان صفحة نظيفة 100%
-            await page.wait_for_timeout(1500)
-            
-            # استخراج معلومات الحساب وحالة التوثيق
+            # 4. استخراج معلومات الحساب وحالة التوثيق برمجياً
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
                     let text = metaDes ? metaDes.content : "غير متوفر";
+                    
                     const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
-                    return { description: text, verified: isVerified };
+                    
+                    return {
+                        description: text,
+                        verified: isVerified
+                    };
                 } catch (e) {
                     return { description: "غير متوفر", verified: false };
                 }
             }""")
             
-            # التقاط الصورة بمقاس الكمبيوتر وبدون نافذة
+            # 5. التقاط لقطة الشاشة وهي نظيفة وكاملة
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
         end_time = datetime.now()
         duration = (end_time - start_time).seconds
         
+        # تنسيق وصف الرسالة بشكل احترافي
         desc = profile_info.get("description", "لا توجد تفاصيل")
         verified_badge = "✅ نعم (موثق)" if profile_info.get("verified") else "❌ لا (غير موثق)"
         
@@ -91,12 +96,12 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 photo=photo,
                 caption=caption,
-                parse_mode="Markdown"
-            )
+                parse_mode="Markdown")
             
         await status_message.delete()
         
-    except Exception as e:edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
+    except Exception as e:
+        await status_message.edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
 
 def main():
     TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
@@ -106,9 +111,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بنظام الكمبيوتر وإغلاق النوافذ...")
+    print("البوت الشامل يعمل الآن بكفاءة...")
     app.run_polling()
 
-if __name__ == "__main__":
+if name == "__main__":
     main()
-        await status_message.
