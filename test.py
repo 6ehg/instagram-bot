@@ -19,7 +19,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وإغلاق النافذة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وإزالة النوافذ بقوة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -32,28 +32,31 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تظهر النافذة المنبثقة
+            # الانتظار حتى تبدأ الصفحة بالظهور
             await page.wait_for_timeout(3000)
             
-            # محاولة النقر الفعلي على زر الـ (X) لإغلاق النافذة تماماً كأنها حقيقة
+            # حقن سكريبت قوي يقوم بإبادة وحذف أي نافذة تسجيل دخول أو تعتيم فوراً من الجذور
             try:
-                # البحث عن زر الإغلاق الذي يحتوي على علامة X أو زر القفل الخاص بالنافذة
-                close_btn = page.locator("div[role='dialog'] button, svg[aria-label='Close']").first
-                if await close_btn.is_visible():
-                    await close_btn.click()
-                    await page.wait_for_timeout(1000) # الانتظار ثانية لاختفاء النافذة
-            except Exception:
-                # لو لم يجد الزر، نقوم بإزالتها برمجياً كاحتياط
                 await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    // حذف أي عنصر يحتوي على خاصية dialog (النافذة المزعجة)
+                    const dialogs = document.querySelectorAll("div[role='dialog'], div.x1n2onr6.x1ja2u2z");
                     dialogs.forEach(el => el.remove());
+                    
+                    // حذف خلفية التعتيم السوداء
+                    const backdrops = document.querySelectorAll("div._a23z, div.x1ypdohk");
+                    backdrops.forEach(el => el.remove());
+                    
+                    // إعادة التمرير وإلغاء القفل عن الصفحة
                     document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
                 }""")
+            except Exception:
+                pass
             
-            # فترة استقرار قصيرة جداً لضمان ظهور كل بيانات الحساب
+            # مهلة قصيرة جداً لاستقرار الصفحة بعد الحذف
             await page.wait_for_timeout(1000)
             
-            # التقاط الصورة وإرسالها نظيفة
+            # التقاط الصورة نظيفة تماماً
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -80,7 +83,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بضرورة النقر على زر الإغلاق...")
+    print("البوت يعمل الآن بآلية الحذف القوي للنوافذ...")
     app.run_polling()
 
 if __name__ == "__main__":
