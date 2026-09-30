@@ -93,10 +93,8 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
             f"🏅 حالة التوثيق: {verified_badge}\n"
             f"⏳ مدة غياب الحساب / وقت الفحص: {time_str}"
         )
-
-        wih open(sreenshot_path,  "rb") 
-        as photo:
-        await context.bot.send_photo(
+        
+        with open(screenshot_path, "rb") as photo:await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
                 caption=caption,
@@ -154,4 +152,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-        with open(screenshot_path, "rb") as photo:
