@@ -20,7 +20,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} وانتظار اكتمال تحميل البيانات...")
+    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} ومنح الوقت الكافي لتحميل البيانات...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -33,7 +33,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # 1. إغلاق النافذة المنبثقة فور ظهورها برمجياً
+            # 1. إغلاق النافذة المنبثقة فوراً
             try:
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
@@ -45,17 +45,10 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             
-            # 2. الانتظار بذكاء حتى تظهر أرقام المتابعين (المطابقة لـ followers) على الشاشة فعلياً
-            try:
-                await page.wait_for_selector("a[href*='/followers/']", timeout=10000)
-            except Exception:
-                # لو تأخر العنصر، ننتظر ثوانٍ إضافية كحماية
-                await page.wait_for_timeout(3000)
+            # 2. زيادة وقت الانتظار لضمان اكتمال ظهور المتابعين والصورة الشخصية تماماً
+            await page.wait_for_timeout(3500)
             
-            # 3. فترة استقرار قصيرة جداً (0.5 ثانية) لضمان ثبات الشكل النهائي للصورة
-            await page.wait_for_timeout(500)
-            
-            # 4. التقاط الصورة وإرسالها وهي كاملة وواضحة تماماً
+            # 3. التقاط الصورة وإرسالها
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -66,7 +59,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=f"📸 لقطة شاشة كاملة وواضحة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
+                caption=f"📸 لقطة شاشة للحساب: @{username}\n⏱️ استغرقت العملية: {duration} ثانية"
             )
             
         await status_message.delete()
@@ -82,7 +75,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بانتظار اكتمال التحميل...")
+    print("البوت يعمل الآن بالوقت المعدل...")
     app.run_polling()
 
 if __name__ == "__main__":
