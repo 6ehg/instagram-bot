@@ -19,7 +19,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} بوضع الموبايل لتجنب النوافذ...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وتجاوز النافذة بدقة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -27,22 +27,33 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
+            page = await browser.new_page(viewport={"width": 1280, "height": 800})
             
-            # فتح المتصفح بخصائص هاتف محمول (Mobile Emulation) لمنع ظهور نافذة الدخول المزعجة
-            context_device = await browser.new_context(
-                viewport={"width": 390, "height": 844},
-                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-                is_mobile=True
-            )
-            page = await context_device.new_page()
+            # حقن سكريبت يراقب ظهور النافذة ويقوم بحذفها فوراً قبل حتى أن ترسم نفسها على الشاشة
+            await page.add_init_script("""() => {
+                const observer = new MutationObserver((mutations) => {
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => el.remove());
+                });
+                observer.observe(document, { childList: true, subtree: true });
+            }""")
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تحميل الصفحة بوضع الموبايل
-            await page.wait_for_timeout(5000)
+            # الانتظار حتى تستقر الصفحة بالكامل (6 ثوانٍ)
+            await page.wait_for_timeout(6000)
             
-            # استخراج معلومات الحساب بدقة من البيانات الوصفية
+            # مسح إضافي يدوي للتأكد من نظافة الشاشة
+            try:
+                await page.evaluate("""() => {
+                    document.querySelectorAll("div[role='dialog']").forEach(el => el.remove());
+                    document.body.style.overflow = 'auto';
+                }""")
+            except Exception:
+                pass
+            
+            # استخراج معلومات الحساب وحالة التوثيق
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -54,7 +65,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             }""")
             
-            # التقاط الصورة بوضع الموبايل (نظيفة وخالية من النوافذ الكبيرة)
+            # التقاط الصورة نظيفة
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -84,17 +95,16 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await status_message.edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
-
-def main():
-    TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
+TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
     
     app = ApplicationBuilder().token(TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     
-    print("البوت يعمل الآن بوضع محاكاة الموبايل...")
+    print("البوت يعمل الآن بمرقبة وإزالة النوافذ تلقائياً...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+def main():
