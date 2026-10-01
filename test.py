@@ -110,5 +110,5 @@ def main():
     print("البوت يعمل الآن بنظام الكمبيوتر وإغلاق النوافذ...")
     app.run_polling()
 
-if name == "__main__":
+if __name__ == "__main__":
     main()
