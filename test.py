@@ -1,9 +1,90 @@
-minutes, seconds = divmod(remainder, 60)
+import asyncio
+from datetime import datetime
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from playwright.async_api import async_playwright
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "أهلاً بك يا فنان! بوت مراقبة الحسابات جاهز 🚀\n"
+        "أمر المراقبة المستمرة:\n/track username"
+    )
+
+async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
+    screenshot_path = f"{username}.png"
+    attempt = 1
+    
+    while True:
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
+                page = await browser.new_page(viewport={"width": 1280, "height": 800})
+                
+                url = f"https://www.instagram.com/{username}/"
+                response = await page.goto(url, timeout=60000)
+                
+                if response and response.status == 404:
+                    await browser.close()
+                    await asyncio.sleep(30)
+                    attempt += 1
+                    continue
+                
+                await page.wait_for_timeout(3000)
+                
+                try:
+                    await page.evaluate("""() => {
+                        const overlays = document.querySelectorAll("div[role='dialog'], div._a23z, div._aacl, div._a8k_");
+                        overlays.forEach(el => el.remove());
+                        
+                        const semiTrans = document.querySelectorAll("div[style*='background-color']");
+                        semiTrans.forEach(el => {
+                            if (window.getComputedStyle(el).backgroundColor.includes('rgba') || window.getComputedStyle(el).backgroundColor.includes('rgb')) {
+                                el.style.display = 'none';
+                            }
+                        });
+                        
+                        document.body.style.overflow = 'auto';
+                    }""")
+                except Exception:
+                    pass
+                
+                await page.keyboard.press("Escape")
+                await page.wait_for_timeout(1000)
+                
+                is_not_found = await page.evaluate("""() => {
+                    const bodyText = document.body.innerText;
+                    return bodyText.includes("Sorry, this page isn't available.") || bodyText.includes("عذراً، هذه الصفحة غير متوفرة.");
+                }""")
+                
+                if is_not_found:
+                    await browser.close()
+                    await asyncio.sleep(30)
+                    attempt += 1
+                    continue
+                
+                profile_info = await page.evaluate("""() => {
+                    try {
+                        const metaDes = document.querySelector('meta[property="og:description"]');
+                        let text = metaDes ? metaDes.content : "غير متوفر";
+                        const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
+                        return { description: text, verified: isVerified };
+                    } catch (e) {
+                        return { description: "غير متوفر", verified: false };
+                    }
+                }""")
+                
+                await page.screenshot(path=screenshot_path, full_page=False)
+                await browser.close()
+                
+            found_time = datetime.now()
+            total_duration = found_time - start_time
+            
+            hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
+            minutes, seconds = divmod(remainder, 60)
             
             time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية" if hours > 0 else f"{minutes} دقيقة و {seconds} ثانية" if minutes > 0 else f"{seconds} ثانية"
             
-            desc = profile_info.get("description", "لا توجد تفاصيل")
-            verified_badge = "نعم (موثق)" if profile_info.get("verified") else "لا (غير موثق)"
+            desc = profile_info.get("description", "لا توجد تفاصيل")verified_badge = "نعم (موثق)" if profile_info.get("verified") else "لا (غير موثق)"
             
             caption = (
                 f"🚨 **تم رصد ظهور الحساب بنجاح!**\n"
@@ -17,7 +98,7 @@ minutes, seconds = divmod(remainder, 60)
             
             with open(screenshot_path, "rb") as photo:
                 await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
-            break # إيقاف حلقة المراقبة بعد أن تم العثور عليه بنجاح
+            break
             
         except Exception:
             await asyncio.sleep(30)
@@ -32,9 +113,8 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     start_time = datetime.now()
     
-    await update.message.reply_text(f"👀 جاري بدء المراقبة المستمرة للحساب @{units_fix if 'units_fix' in locals() else username}...\nسأقوم بتنبيهك فور ظهوره وإرسال المدة الساطعة بدقة!")
+    await update.message.reply_text(f"👀 جاري بدء المراقبة المستمرة للحساب @{username}...\nسأقوم بتنبيهك فور ظهوره وإرسال المدة بدقة!")
     
-    # تشغيل عملية المراقبة في الخلفية بدون تجميد البوت
     context.application.create_task(monitor_account(context, chat_id, username, start_time))
 
 def main():
