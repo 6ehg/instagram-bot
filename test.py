@@ -49,7 +49,9 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(2000)
+            
+            # زيادة وقت الانتظار لضمان استقرار تحميل العناصر بالكامل وظهورها بوضوح تام
+            await page.wait_for_timeout(4000)
             
             # استخراج معلومات الحساب وحالة التوثيق
             profile_info = await page.evaluate("""() => {
@@ -63,10 +65,8 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             }""")
             
-            # تمرير بسيط والتقاط الصورة بمقاس دقيق لمنع ظهور المساحات البيضاء الفارغة
-            await page.evaluate("window.scrollTo(0, 100);")
-            await page.wait_for_timeout(1000)
-            await page.screenshot(path=screenshot_path, full_page=False, clip={"x": 0, "y": 0, "width": 1280, "height": 720})
+            # التقاط لقطة شاشة واضحة وكاملة للبروفايل بدون أي قص
+            await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
         end_time = datetime.now()
@@ -97,7 +97,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_message.edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
 
 def main():
-    # استخدام التوكن الجديد الخاص بك مباشرة
+    # توكن البوت الصحيح الخاص بك
     TOKEN = "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U"
     
     app = ApplicationBuilder().token(TOKEN).build()
