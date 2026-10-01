@@ -26,17 +26,14 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         async with async_playwright() as p:
-            # تشغيل المتصفح بدقة عالية ووضوح ممتاز
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
             page = await browser.new_page(viewport={"width": 1440, "height": 900})
             
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار حتى تفتح الصفحة بالكامل
             await page.wait_for_timeout(5000)
             
-            # إزالة أي نوافذ منبثقة أو طبقات تعتيم مزعجة من انستغرام
             try:
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z, div._a8k_");
@@ -51,7 +48,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(2000)
             
-            # استخراج معلومات الحساب بدقة
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -63,7 +59,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             }""")
             
-            # التقاط الصورة بكامل العرض وبدون قص لضمان الوضوح التام
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -100,8 +95,7 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
-    app.
-    add_handler(CommandHandler("track", track_user))
+    app.add_handler(CommandHandler("track", track_user))
     
     print("البوت يعمل الآن بوضوح عالي جداً...")
     app.run_polling()
