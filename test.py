@@ -51,7 +51,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                     pass
                 
                 await page.keyboard.press("Escape")
-                await page.wait_for_timeout(500) # انتظار أقل من ثانية لضمان صفاء الصورة ووضوحها
+                await page.wait_for_timeout(500)
                 
                 is_not_found = await page.evaluate("""() => {
                     const bodyText = document.body.innerText;
@@ -81,8 +81,10 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             found_time = datetime.now()
             total_duration = found_time - start_time
             
-            hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
-            minutes, seconds = divmod(remainder, 60)
+            total_seconds = int(total_duration.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
             
             if hours > 0:
                 time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية"elif minutes > 0:
@@ -98,7 +100,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                 verified_badge = "لا (غير موثق)"
             
             caption = (
-                f"🚨 **تم رصد ظهور الحساب بنجاح!**\n"
+                f"🚨 تم رصد ظهور الحساب بنجاح!\n"
                 f"👤 اليوزر: @{username}\n"
                 f"⏱ المدة حتى ظهر: {time_str}\n"
                 f"🔄 عدد المحاولات: {attempt}\n"
