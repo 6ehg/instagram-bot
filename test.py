@@ -100,8 +100,8 @@ async def run_bot(token):
     print(f"تم تشغيل البوت برمز التوكن: {token[:10]}...")
 
 async def main():
-    # قائمة التوكنات للعمل في وقت واحد
-    tokens = [
+    # قائمة البوتات الثلاثة (بوتك الأساسي + البوتات الجديدة)
+    tokens = ["8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U",
         "8505165316:AAGIOPf61KpHSwLUuJrYS_HDla7J21KMgIA",
         "8956798204:AAGlyC_Ygh3YPB4GcBD5ZO8J0uZlhR7JExM"
     ]
