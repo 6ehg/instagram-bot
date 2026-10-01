@@ -7,7 +7,7 @@ from playwright.async_api import async_playwright
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "لأخذ لقطة شاشة واضحة ونظيفة ومعرفة معلومات الحساب، أرسل الأمر هكذا:\n"
+        "لأخذ لقطة شاشة واضحة ونظيفة لمعلومات الحساب، أرسل الأمر هكذا:\n"
         "/track username"
     )
 
@@ -19,7 +19,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} والتقاط صورة واضحة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} والانتظار حتى تكتمل ظهور البيانات والتقاط الصورة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -32,22 +32,10 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            await page.wait_for_timeout(5000)
+            # الانتظار بثبات حتى تظهر عناصر الحساب والبيانات بوضوح على الشاشة
+            await page.wait_for_timeout(6000)
             
-            try:
-                await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z, div._a8k_");
-                    dialogs.forEach(el => el.remove());
-                    
-                    document.body.style.overflow = 'auto';
-                    document.documentElement.style.overflow = 'auto';
-                }""")
-            except Exception:
-                pass
-            
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(2000)
-            
+            # استخراج معلومات الحساب والمتابعين بدقة من الوصف
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -59,6 +47,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             }""")
             
+            # التقاط الصورة مباشرة بعد ظهور البروفايل والمتابعين بكامل الوضوح
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
@@ -100,8 +89,8 @@ async def run_bot(token):
     print(f"تم تشغيل البوت برمز التوكن: {token[:10]}...")
 
 async def main():
-    # قائمة البوتات الثلاثة (بوتك الأساسي + البوتات الجديدة)
-    tokens = ["8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U",
+    tokens = [
+        "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U",
         "8505165316:AAGIOPf61KpHSwLUuJrYS_HDla7J21KMgIA",
         "8956798204:AAGlyC_Ygh3YPB4GcBD5ZO8J0uZlhR7JExM"
     ]
@@ -111,5 +100,5 @@ async def main():
     while True:
         await asyncio.sleep(3600)
 
-if __name__ == "__main__":
+if ___name__ == "__main__":
     asyncio.run(main())
