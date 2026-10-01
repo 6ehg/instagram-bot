@@ -1,108 +1,152 @@
+import asyncio
 from datetime import datetime
-import time
-import telebot
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from playwright.async_api import async_playwright
 
-# التوكن الخاص بك الذي أرسلته
-TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
-bot = telebot.TeleBot(TOKEN)
-
-# قاموس لحفظ الحسابات قيد المراقبة
-tracked_accounts = {}
-
-
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-  bot.reply_to(
-      message,
-      "أهلاً بك في بوت مراقبة انستغرام! 🚀\n"
-      "استخدم الأمر هكذا لمراقبة أي حساب:\n"
-      "`/track username`",
-      parse_mode="Markdown",
-  )
-
-
-@bot.message_handler(commands=['track'])
-def track_account(message):
-  try:
-    # استخراج اليوزر من رسالة المستخدم
-    args = message.text.split()
-    if len(args) < 2:
-      bot.reply_to(
-          message,
-          "الرجاء كتابة اليوزر بعد الأمر بشكل صحيح.\nمثال: `/track instagram`",
-          parse_mode="Markdown",
-      )
-      return
-
-    username = args[1].replace("@", "").strip()
-    tracked_accounts[username] = datetime.now()
-
-    bot.reply_to(
-        message,
-        f"⏳ تم بدء مراقبة الحساب: @{username}\nسيتم فحص حالته وإعلامك فوراً عند رصد أي تغير!",
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "أهلاً بك يا فنان! بوت مراقبة الحسابات جاهز 🚀\n"
+        "أمر المراقبة المستمرة:\n/track username"
     )
 
-    # بدء عملية الفحص والتقاط الصورة
-    check_instagram_status(username, message.chat.id)
+async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
+    screenshot_path = f"{username}_{chat_id}.png"
+    attempt = 1
+    
+    while True:
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
+                page = await browser.new_page(viewport={"width": 1280, "height": 800})
+                
+                url = f"https://www.instagram.com/{username}/"
+                response = await page.goto(url, timeout=60000)
+                
+                if response and response.status == 404:
+                    await browser.close()
+                    await asyncio.sleep(30)
+                    attempt += 1
+                    continue
+                
+                await page.wait_for_timeout(2000)
+                
+                try:
+                    await page.evaluate("""() => {
+                        const overlays = document.querySelectorAll("div[role='dialog'], div._a23z, div._aacl, div._a8k_, div[class*='x1n2onr6']");
+                        overlays.forEach(el => el.remove());
+                        
+                        const semiTrans = document.querySelectorAll("div[style*='background-color']");
+                        semiTrans.forEach(el => {
+                            const bg = window.getComputedStyle(el).backgroundColor;
+                            if (bg.includes('rgba') || bg.includes('rgb')) {
+                                el.style.display = 'none';
+                            }
+                        });
+                        
+                        document.body.style.overflow = 'auto';
+                        document.documentElement.style.overflow = 'auto';
+                    }""")
+                except Exception:
+                    pass
+                
+                await page.keyboard.press("Escape")
+                await page.wait_for_timeout(500) # انتظار أقل من ثانية لضمان صفاء الصورة ووضوحها
+                
+                is_not_found = await page.evaluate("""() => {
+                    const bodyText = document.body.innerText;
+                    return bodyText.includes("Sorry, this page isn't available.") || bodyText.includes("عذراً، هذه الصفحة غير متوفرة.");
+                }""")
+                
+                if is_not_found:
+                    await browser.close()
+                    await asyncio.sleep(30)
+                    attempt += 1
+                    continue
+                
+                profile_info = await page.evaluate("""() => {
+                    try {
+                        const metaDes = document.querySelector('meta[property="og:description"]');
+                        let text = metaDes ? metaDes.content : "غير متوفر";
+                        const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
+                        return { description: text, verified: isVerified };
+                    } catch (e) {
+                        return { description: "غير متوفر", verified: false };
+                    }
+                }""")
+                
+                await page.screenshot(path=screenshot_path, full_page=False)
+                await browser.close()
+                
+            found_time = datetime.now()
+            total_duration = found_time - start_time
+            
+            hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
+            if hours > 0:
+                time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية"elif minutes > 0:
+                time_str = f"{minutes} دقيقة و {seconds} ثانية"
+            else:
+                time_str = f"{seconds} ثانية"
+            
+            desc = profile_info.get("description", "لا توجد تفاصيل")
+            
+            if profile_info.get("verified"):
+                verified_badge = "نعم (موثق)"
+            else:
+                verified_badge = "لا (غير موثق)"
+            
+            caption = (
+                f"🚨 **تم رصد ظهور الحساب بنجاح!**\n"
+                f"👤 اليوزر: @{username}\n"
+                f"⏱ المدة حتى ظهر: {time_str}\n"
+                f"🔄 عدد المحاولات: {attempt}\n"
+                f"-----------------------------------\n"
+                f"التفاصيل: {desc}\n"
+                f"حالة التوثيق: {verified_badge}"
+            )
+            
+            with open(screenshot_path, "rb") as photo:
+                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
+            break
+            
+        except Exception:
+            await asyncio.sleep(30)
+            attempt += 1
+            continue
 
-  except Exception as e:
-    bot.reply_to(message, f"حدث خطأ: {e}")
+async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("أكتب اليوزر بعد الأمر للمراقبة المستمرة، مثل:\n/track username")
+        return
+    username = context.args[0].replace("@", "").strip()
+    chat_id = update.effective_chat.id
+    start_time = datetime.now()
+    
+    await update.message.reply_text(f"👀 جاري بدء المراقبة المستمرة للحساب @{username}...\nسأقوم بتنبيهك فور ظهوره وإرسال المدة بدقة!")
+    
+    context.application.create_task(monitor_account(context, chat_id, username, start_time))
 
+async def run_bot(token):
+    app = ApplicationBuilder().token(token).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("track", track_user))
+    
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    print(f"تم تشغيل البوت بنجاح برمز التوكن: {token[:10]}...")
 
-def check_instagram_status(username, chat_id):
-  start_time = tracked_accounts.get(username)
-  url = f"https://www.instagram.com/{username}/"
+async def main():
+    tokens = [
+        "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U"
+    ]
+    
+    await asyncio.gather(*(run_bot(token) for token in tokens))
+    
+    while True:
+        await asyncio.sleep(3600)
 
-  # إعداد متصفح وهمي خفي (Headless) للعمل في الخلفية
-  options = Options()
-  options.add_argument("--headless")
-  options.add_argument("--disable-gpu")
-  options.add_argument("--no-sandbox")
-  options.add_argument(
-      "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-  )
-
-  driver = webdriver.Chrome(options=options)
-
-  try:
-    driver.get(url)
-    time.sleep(6)  # انتظار تحميل الصفحة بالكامل
-
-    # التقاط صورة الشاشة وحفظها
-    screenshot_path = f"{username}_screen.png"
-    driver.save_screenshot(screenshot_path)
-
-    # حساب المدة الزمنية المستغرقة منذ بدء المراقبة
-    end_time = datetime.now()
-    duration_seconds = int((end_time - start_time).total_seconds())
-
-    # تحويل الثواني إلى صيغة (أيام، ساعات، دقائق)
-    days = duration_seconds // 86400
-    hours = (duration_seconds % 86400) // 3600
-    minutes = (duration_seconds % 3600) // 60
-    duration_str = f"{days} أيام و {hours} ساعات و {minutes} دقائق"
-
-    # إرسال الصورة والنتيجة لتليجرام
-    with open(screenshot_path, "rb") as photo:
-      bot.send_photo(
-          chat_id,
-          photo,
-          caption=(
-              f"🎉 تنبيه بخصوص الحساب: @{username}\n\n"
-              f"⏱️ المدة الزمنية المستغرقة: {duration_str}\n"
-              "📸 تم التقاط صورة البروفايل بنجاح!"
-          ),
-          parse_mode="Markdown",
-      )
-
-  except Exception as e:
-    print(f"خطأ أثناء فحص الحساب: {e}")
-  finally:
-    driver.quit()
-
-
-# تشغيل البوت باستمرار
-print("البوت يعمل الآن ومستعد لتلقي الأوامر...")
-bot.infinity_polling()
+if __name__ == "__main__":
+    asyncio.run(main())
