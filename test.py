@@ -86,11 +86,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             minutes = (total_seconds % 3600) // 60
             seconds = total_seconds % 60
             
-            if hours > 0:
-                time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية"elif minutes > 0:
-                time_str = f"{minutes} دقيقة و {seconds} ثانية"
-            else:
-                time_str = f"{seconds} ثانية"
+            time_str = f"{hours}h {minutes}m {seconds}s"
             
             desc = profile_info.get("description", "لا توجد تفاصيل")
             
