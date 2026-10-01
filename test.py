@@ -6,12 +6,10 @@ from playwright.async_api import async_playwright
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "أهلاً بك في بوت مراقبة إنستغرام الذكي والمطور! 🕵️‍♂️✨\n\n"
-        "لأخذ لقطة شاشة صافية ومراقبة الحسابات، أرسل الأمر هكذا:\n"
-        "/track username"
+        "أهلاً بك يا فنان! البوت جاهز ومباشر للفحص 🚀\n"
+        "أرسل الأمر هكذا لفحص الحساب:\n/track username"
     )
 
-# دالة مسؤولة عن فحص الحساب واستخراج البيانات وصناعة صورة صافية
 async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
     screenshot_path = f"{username}.png"
     try:
@@ -26,29 +24,28 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
                 await browser.close()
                 return False
             
-            await page.wait_for_timeout(5000)
+            await page.wait_for_timeout(4000)
             
-            # إزالة النوافذ المنبثقة وطبقات التعتيم الباهتة بالقوة من الجذور
+            # الكود المحدث لإزالة البهتان وطبقات الإنستغرام الداكنة تماماً
             try:
                 await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z, div._a8k-");
-                    dialogs.forEach(el => el.remove());
+                    const overlays = document.querySelectorAll("div[role='dialog'], div._a23z, div._aacl, div._a8k_");
+                    overlays.forEach(el => el.remove());
                     
-                    document.body.style.overflow = 'auto';
-                    document.documentElement.style.overflow = 'auto';
-                    
-                    const overlays = document.querySelectorAll("div[style*='background-color'], div[class*='overlay']");
-                    overlays.forEach(el => {
-                        if (window.getComputedStyle(el).position === 'fixed') {
-                            el.remove();
+                    const semiTrans = document.querySelectorAll("div[style*='background-color']");
+                    semiTrans.forEach(el => {
+                        if (window.getComputedStyle(el).backgroundColor.includes('rgba') || window.getComputedStyle(el).backgroundColor.includes('rgb')) {
+                            el.style.display = 'none';
                         }
                     });
+                    
+                    document.body.style.overflow = 'auto';
                 }""")
             except Exception:
                 pass
             
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(1500)
             
             is_not_found = await page.evaluate("""() => {
                 const bodyText = document.body.innerText;
@@ -79,72 +76,42 @@ async def check_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int, usern
         hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
         minutes, seconds = divmod(remainder, 60)
         
-        time_str = ""
-        if hours > 0:
-            time_str += f"{hours} ساعة و "
-        if minutes > 0:
-            time_str += f"{minutes} دقيقة و "
-        time_str += f"{seconds} ثانية"
+        time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية" if hours > 0 else f"{minutes} دقيقة و {seconds} ثانية" if minutes > 0 else f"{seconds} ثانية"
         
         desc = profile_info.get("description", "لا توجد تفاصيل")
         verified_badge = "نعم (موثق)" if profile_info.get("verified") else "لا (غير موثق)"
         
-        caption = (
-            f"تم العثور على الحساب: @{username}\n"
-            f"-----------------------------------\n"
-            f"التفاصيل: {desc}\n"f"حالة التوثيق: {verified_badge}\n"
-            f"مدة غياب الحساب / وقت الفحص: {time_str}"
-        )
+        caption = f"تم العثور على الحساب: @{username}\n-----------------------------------\nالتفاصيل: {desc}\nحالة التوثيق: {verified_badge}\nوقت الفحص: {time_str}"
         
         with open(screenshot_path, "rb") as photo:
-            await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                caption=caption
-            )
+            await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
         return True
-        
     except Exception:
         return False
 
-async def background_monitor(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
-    await context.bot.send_message(chat_id=chat_id, text=f"⏳ الحساب @{username} غير موجود حالياً. بدأت مراقبته وسأخبرك فور ظهوره!")
-    
-    while True:
-        await asyncio.sleep(120)
-        found = await check_and_send(context, chat_id, username, start_time)
-        if found:
-            break
-
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
+        await update.message.reply_text("أكتب اليوزر بعد الأمر، مثل:\n/track elonmusk")
         return
-    
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
-    
     start_time = datetime.now()
     
     status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username}...")
-    
     success = await check_and_send(context, chat_id, username, start_time)
     
     if success:
         await status_message.delete()
     else:
         await status_message.delete()
-        asyncio.create_task(background_monitor(context, chat_id, username, start_time))
+        await update.message.reply_text(f"عذراً، الحساب @{username} غير موجود أو غير متوفر حالياً.")
 
 def main():
     TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
-    
     app = ApplicationBuilder().token(TOKEN).build()
-    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
-    
-    print("البوت يعمل الآن بصور صافية وبدون أخطاء...")
+    print("البوت يعمل الآن...")
     app.run_polling()
 
 if __name__ == "__main__":
