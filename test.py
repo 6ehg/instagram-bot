@@ -19,7 +19,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username}، إغلاق النوافذ، والتقاط صورة واضحة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} وإغلاق نافذة الدخول فور ظهورها...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -32,18 +32,17 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # 1. الانتظار حتى تفتح الصفحة مبدئياً
-            await page.wait_for_timeout(4000)
+            # الانتظار حتى تظهر النافذة المزعجة
+            await page.wait_for_timeout(3000)
             
-            # 2. إغلاق وحذف نافذة تسجيل الدخول المنبثقة وتعتيم الخلفية من الـ DOM جذرياً
+            # إغلاق ومسح النافذة المنبثقة فوراً بمجرد ظهورها دون المساس بالمحتوى
             try:
                 await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z, div._a8k_, div[class*='x1n2onr6']");
-                    dialogs.forEach(el => el.remove());
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => el.style.display = 'none');
                     
-                    // إزالة طبقات التعتيم السوداء الخلفية
-                    const backdrops = document.querySelectorAll("div[class*='x1s85apg'], div._acaz");
-                    backdrops.forEach(el => el.remove());
+                    const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
+                    backdrops.forEach(el => el.style.display = 'none');
                     
                     document.body.style.overflow = 'auto';
                     document.documentElement.style.overflow = 'auto';
@@ -51,11 +50,9 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             
-            # 3. ضغطة زر Escape احتياطية لإلغاء أي نافذة متبقية
+            # ضغطة إضافية للتأكد من اختفاء أي أثر
             await page.keyboard.press("Escape")
-            
-            # 4. الانتظار حتى تختفي النافذة تماماً وتستقر بيانات المتابعين والحساب وتوضح الصورة
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(1500)
             
             # استخراج معلومات الحساب بدقة
             profile_info = await page.evaluate("""() => {
@@ -69,7 +66,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             }""")
             
-            # 5. التقاط لقطة الشاشة النظيفة بعد إزالة النافذة واستقرار العناصر
+            # التقاط الصورة مباشرة وبدون قص عشوائي لتخرج نظيفة وواضحة تماماً
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
