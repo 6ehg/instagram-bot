@@ -82,9 +82,17 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
             minutes, seconds = divmod(remainder, 60)
             
-            time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية" if hours > 0 else f"{minutes} دقيقة و {seconds} ثانية" if minutes > 0 else f"{seconds} ثانية"
+            if hours > 0:
+                time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية"
+            elif minutes > 0:
+                time_str = f"{minutes} دقيقة و {seconds} ثانية"
+            else:
+                time_str = f"{seconds} ثانية"desc = profile_info.get("description", "لا توجد تفاصيل")
             
-            desc = profile_info.get("description", "لا توجد تفاصيل")verified_badge = "نعم (موثق)" if profile_info.get("verified") else "لا (غير موثق)"
+            if profile_info.get("verified"):
+                verified_badge = "نعم (موثق)"
+            else:
+                verified_badge = "لا (غير موثق)"
             
             caption = (
                 f"🚨 **تم رصد ظهور الحساب بنجاح!**\n"
