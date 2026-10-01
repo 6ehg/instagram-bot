@@ -7,7 +7,7 @@ from playwright.async_api import async_playwright
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "لأخذ لقطة شاشة واضحة ونظيفة لمعلومات الحساب، أرسل الأمر هكذا:\n"
+        "لأخذ لقطة شاشة نظيفة ومعرفة معلومات الحساب، أرسل الأمر هكذا:\n"
         "/track username"
     )
 
@@ -19,7 +19,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فتح حساب @{username} والانتظار حتى تكتمل ظهور البيانات والتقاط الصورة...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username}، إغلاق النوافذ، والتقاط صورة واضحة...")
     
     start_time = datetime.now()
     screenshot_path = f"{username}.png"
@@ -32,10 +32,32 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = f"https://www.instagram.com/{username}/"
             await page.goto(url, timeout=60000)
             
-            # الانتظار بثبات حتى تظهر عناصر الحساب والبيانات بوضوح على الشاشة
-            await page.wait_for_timeout(6000)
+            # 1. الانتظار حتى تفتح الصفحة مبدئياً
+            await page.wait_for_timeout(4000)
             
-            # استخراج معلومات الحساب والمتابعين بدقة من الوصف
+            # 2. إغلاق وحذف نافذة تسجيل الدخول المنبثقة وتعتيم الخلفية من الـ DOM جذرياً
+            try:
+                await page.evaluate("""() => {
+                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z, div._a8k_, div[class*='x1n2onr6']");
+                    dialogs.forEach(el => el.remove());
+                    
+                    // إزالة طبقات التعتيم السوداء الخلفية
+                    const backdrops = document.querySelectorAll("div[class*='x1s85apg'], div._acaz");
+                    backdrops.forEach(el => el.remove());
+                    
+                    document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
+                }""")
+            except Exception:
+                pass
+            
+            # 3. ضغطة زر Escape احتياطية لإلغاء أي نافذة متبقية
+            await page.keyboard.press("Escape")
+            
+            # 4. الانتظار حتى تختفي النافذة تماماً وتستقر بيانات المتابعين والحساب وتوضح الصورة
+            await page.wait_for_timeout(3000)
+            
+            # استخراج معلومات الحساب بدقة
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -47,7 +69,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             }""")
             
-            # التقاط الصورة مباشرة بعد ظهور البروفايل والمتابعين بكامل الوضوح
+            # 5. التقاط لقطة الشاشة النظيفة بعد إزالة النافذة واستقرار العناصر
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
             
