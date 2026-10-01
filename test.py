@@ -6,133 +6,108 @@ from playwright.async_api import async_playwright
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "أهلاً بك يا فنان! بوت مراقبة الحسابات جاهز 🚀\n"
-        "أمر المراقبة المستمرة:\n/track username"
+        "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
+        "لأخذ لقطة شاشة نظيفة ومعرفة معلومات الحساب، أرسل الأمر هكذا:\n"
+        "/track username"
     )
-
-async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
-    screenshot_path = f"{username}.png"
-    attempt = 1
-    
-    while True:
-        try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
-                page = await browser.new_page(viewport={"width": 1280, "height": 800})
-                
-                url = f"https://www.instagram.com/{username}/"
-                response = await page.goto(url, timeout=60000)
-                
-                if response and response.status == 404:
-                    await browser.close()
-                    await asyncio.sleep(7)
-                    attempt += 1
-                    continue
-                
-                await page.wait_for_timeout(3000)
-                
-                try:
-                    await page.evaluate("""() => {
-                        const overlays = document.querySelectorAll("div[role='dialog'], div._a23z, div._aacl, div._a8k_");
-                        overlays.forEach(el => el.remove());
-                        
-                        const semiTrans = document.querySelectorAll("div[style*='background-color']");
-                        semiTrans.forEach(el => {
-                            if (window.getComputedStyle(el).backgroundColor.includes('rgba') || window.getComputedStyle(el).backgroundColor.includes('rgb')) {
-                                el.style.display = 'none';
-                            }
-                        });
-                        
-                        document.body.style.overflow = 'auto';
-                    }""")
-                except Exception:
-                    pass
-                
-                await page.keyboard.press("Escape")
-                await page.wait_for_timeout(1000)
-                
-                is_not_found = await page.evaluate("""() => {
-                    const bodyText = document.body.innerText;
-                    return bodyText.includes("Sorry, this page isn't available.") || bodyText.includes("عذراً، هذه الصفحة غير متوفرة.");
-                }""")
-                
-                if is_not_found:
-                    await browser.close()
-                    await asyncio.sleep(7)
-                    attempt += 1
-                    continue
-                
-                profile_info = await page.evaluate("""() => {
-                    try {
-                        const metaDes = document.querySelector('meta[property="og:description"]');
-                        let text = metaDes ? metaDes.content : "غير متوفر";
-                        const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
-                        return { description: text, verified: isVerified };
-                    } catch (e) {
-                        return { description: "غير متوفر", verified: false };
-                    }
-                }""")
-                
-                await page.screenshot(path=screenshot_path, full_page=False)
-                await browser.close()
-                
-            found_time = datetime.now()
-            total_duration = found_time - start_time
-            
-            hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
-            minutes, seconds = divmod(remainder, 60)
-            
-            if hours > 0:
-                time_str = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية"
-            elif minutes > 0:
-                time_str = f"{minutes} دقيقة و {seconds} ثانية"
-            else:
-                time_str = f"{seconds} ثانية"
-                
-            desc = profile_info.get("description", "لا توجد تفاصيل")
-            
-            if profile_info.get("verified"):
-                verified_badge = "نعم (موثق)"
-            else:
-                verified_badge = "لا (غير موثق)"
-            
-            caption = (
-                f"🚨 **تم رصد ظهور الحساب بنجاح!**\n"
-                f"👤 اليوزر: @{username}\n"
-                f"⏱️ المدة حتى ظهر: {time_str}\n"
-                f"🔄 عدد المحاولات: {attempt}\n"
-                f"-----------------------------------\n"
-                f"التفاصيل: {desc}\n"
-                f"حالة التوثيق: {verified_badge}"
-            )
-            
-            with open(screenshot_path, "rb") as photo:
-                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
-            break
-            
-        except Exception:
-            await asyncio.sleep(7)
-            attempt += 1
-            continue
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("أكتب اليوزر بعد الأمر للمراقبة المستمرة، مثل:\n/track username")
+        await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
         return
+    
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
+    
+    status_message = await update.message.reply_text(f"🔍 جاري فحص حساب @{username} على سطح المكتب وإغلاق النافذة...")
+    
     start_time = datetime.now()
+    screenshot_path = f"{username}.png"
     
-    await update.message.reply_text(f"👀 جاري بدء المراقبة المستمرة للحساب @{username}...\nسأقوم بتنبيهك فور ظهوره وإرسال المدة بدقة!")
-    
-    context.application.create_task(monitor_account(context, chat_id, username, start_time))
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
+            # شاشة كمبيوتر مكتبي واسعة ونظامية تماماً
+            page = await browser.new_page(viewport={"width": 1280, "height": 800})
+            
+            url = f"https://www.instagram.com/{username}/"
+            await page.goto(url, timeout=60000)
+            
+            # الانتظار حتى تظهر الصفحة والنافذة
+            await page.wait_for_timeout(4000)
+            
+            # إغلاق النافذة المنبثقة وحذفها بالكامل من الشاشة بطريقة برمجية دقيقة
+            try:
+                await page.evaluate("""() => {
+                    // حذف أي نافذة منبثقة أو طبقة تعتيم سوداء
+                    const dialogs = document.querySelectorAll("div[role='dialog'], div._a23z");
+                    dialogs.forEach(el => el.remove());
+                    
+                    // إزالة القفل عن شاشة التمرير
+                    document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
+                }""")
+            except Exception:
+                pass
+            
+            # ضغطة مفتاح Escape كدعم إضافي لإغلاق أي نافذة متبقية
+            await page.keyboard.press("Escape")
+            
+            # وقت استقرار قصير جداً لضمان صفحة نظيفة 100%
+            await page.wait_for_timeout(1500)
+            
+            # استخراج معلومات الحساب وحالة التوثيق
+            profile_info = await page.evaluate("""() => {
+                try {
+                    const metaDes = document.querySelector('meta[property="og:description"]');
+                    let text = metaDes ? metaDes.content : "غير متوفر";
+                    const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
+                    return { description: text, verified: isVerified };
+                } catch (e) {
+                    return { description: "غير متوفر", verified: false };
+                }
+            }""")
+            
+            # التقاط الصورة بمقاس الكمبيوتر وبدون نافذة
+            await page.screenshot(path=screenshot_path, full_page=False)
+            await browser.close()
+            
+        end_time = datetime.now()
+        duration = (end_time - start_time).seconds
+        
+        desc = profile_info.get("description", "لا توجد تفاصيل")
+        verified_badge = "✅ نعم (موثق)" if profile_info.get("verified") else "❌ لا (غير موثق)"
+        
+        caption = (
+            f"👤 معلومات حساب إنستغرام: @{username}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 التفاصيل: {desc}\n"
+            f"🏅 حالة التوثيق: {verified_badge}\n"
+            f"⏱️ استغرقت العملية: {duration} ثانية"
+        )
+        
+        with open(screenshot_path, "rb") as photo:
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=caption,
+                parse_mode="Markdown"
+            )
+            
+        await status_message.delete()
+        
+    except Exception as e:
+        await status_message.edit_text(f"❌ حدث خطأ أثناء فحص الحساب @{username}:\n{e}")
 
 def main():
     TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
+    
     app = ApplicationBuilder().token(TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
-    print("بوت المراقبة المستمرة يعمل الآن...")
+    
+    print("البوت يعمل الآن بنظام الكمبيوتر وإغلاق النوافذ...")
     app.run_polling()
 
 if __name__ == "__main__":
