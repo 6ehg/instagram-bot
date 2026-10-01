@@ -85,7 +85,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🏅 حالة التوثيق: {verified_badge}\n"
             f"⏱️ استغرقت العملية: {duration} ثانية"
         )
-        
         with open(screenshot_path, "rb") as photo:
             await context.bot.send_photo(
                 chat_id=chat_id,
