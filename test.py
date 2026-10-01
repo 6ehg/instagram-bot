@@ -11,7 +11,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str, start_time: datetime):
-    screenshot_path = f"{username}.png"
+    screenshot_path = f"{username}_{chat_id}.png"
     attempt = 1
     
     while True:
@@ -99,7 +99,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             caption = (
                 f"🚨 **تم رصد ظهور الحساب بنجاح!**\n"
                 f"👤 اليوزر: @{username}\n"
-                f"⏱️️ المدة حتى ظهر: {time_str}\n"
+                f"⏱ المدة حتى ظهر: {time_str}\n"
                 f"🔄 عدد المحاولات: {attempt}\n"
                 f"-----------------------------------\n"
                 f"التفاصيل: {desc}\n"
@@ -127,13 +127,29 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.application.create_task(monitor_account(context, chat_id, username, start_time))
 
-def main():
-    TOKEN = "8772895608:AAE-Ok7fM1UzPvreYeh5MQWMN5QMxqOAdo8"
-    app = ApplicationBuilder().token(TOKEN).build()
+async def run_bot(token):
+    app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
-    print("بوت المراقبة المستمرة يعمل الآن...")
-    app.run_polling()
+    
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    print(f"تم تشغيل البوت بنجاح برمز التوكن: {token[:10]}...")
+
+async def main():
+    # قائمة التوكنات للبوت الأول والثاني
+    tokens = [
+        "8772895608:AAE-Ok7fM1UzPvreYeh5MQWMN5QMxqOAdo8",
+        "8782589049:AAER4f6gHzdUYcZ-Tvs859rmioeuTW6hn9U"
+    ]
+    
+    # تشغيل كلا البوتات معاً في نفس الوقت
+    await asyncio.gather(*(run_bot(token) for token in tokens))
+    
+    # إبقاء السكربت يعمل بشكل مستمر
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
