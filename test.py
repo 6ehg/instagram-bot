@@ -25,7 +25,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                 
                 if response and response.status == 404:
                     await browser.close()
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(7)
                     attempt += 1
                     continue
                 
@@ -58,7 +58,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                 
                 if is_not_found:
                     await browser.close()
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(7)
                     attempt += 1
                     continue
                 
@@ -111,7 +111,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             break
             
         except Exception:
-            await asyncio.sleep(30)
+            await asyncio.sleep(7)
             attempt += 1
             continue
 
