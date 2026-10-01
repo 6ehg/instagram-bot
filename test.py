@@ -29,6 +29,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                     attempt += 1
                     continue
                 
+                # انتظار تحميل الصفحة وتخطي النوافذ المزعجة
                 await page.wait_for_timeout(2000)
                 
                 try:
@@ -51,7 +52,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                     pass
                 
                 await page.keyboard.press("Escape")
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(1000)
                 
                 is_not_found = await page.evaluate("""() => {
                     const bodyText = document.body.innerText;
@@ -75,13 +76,17 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                     }
                 }""")
                 
+                # انتظار ظهور عناصر الصفحة الرئيسية لضمان عدم خروج الصورة بيضاء
+                try:
+                    await page.wait_for_selector("main", timeout=10000)
+                except Exception:
+                    pass
+                
                 await page.screenshot(path=screenshot_path, full_page=False)
                 await browser.close()
                 
             found_time = datetime.now()
-            total_duration = found_time - start_time
-            
-            total_seconds = int(total_duration.total_seconds())
+            total_duration = found_time - start_time total_seconds = int(total_duration.total_seconds())
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
             seconds = total_seconds % 60
@@ -98,7 +103,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             caption = (
                 f"🚨 تم رصد ظهور الحساب بنجاح!\n"
                 f"👤 اليوزر: @{username}\n"
-                f"⏱ المدة حتى ظهر: {time_str}\n"
+                f"⏱ المدة حتى ظهوره: {time_str}\n"
                 f"🔄 عدد المحاولات: {attempt}\n"
                 f"-----------------------------------\n"
                 f"التفاصيل: {desc}\n"
@@ -122,7 +127,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     start_time = datetime.now()
     
-    await update.message.reply_text(f"👀 جاري بدء المراقبة المستمرة للحساب @{username}...\nسأقوم بتنبيهك فور ظهوره وإرسال المدة بدقة!")
+    await update.message.reply_text(f"👀 جاري بدء المراقبة المستمرة للحساب @{username}...\nسأقوم بتنبيهك فور ظهوره وإرسال لقطة الشاشة والمدة بدقة!")
     
     context.application.create_task(monitor_account(context, chat_id, username, start_time))
 
