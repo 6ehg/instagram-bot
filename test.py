@@ -87,9 +87,9 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             elif minutes > 0:
                 time_str = f"{minutes} دقيقة و {seconds} ثانية"
             else:
-                time_str = f"{seconds} ثانية'
+                time_str = f"{seconds} ثانية"
                 
-                desc = profile_info.get("description", "لا توجد تفاصيل")
+            desc = profile_info.get("description", "لا توجد تفاصيل")
             
             if profile_info.get("verified"):
                 verified_badge = "نعم (موثق)"
@@ -99,7 +99,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             caption = (
                 f"🚨 **تم رصد ظهور الحساب بنجاح!**\n"
                 f"👤 اليوزر: @{username}\n"
-                f"⏱️ المدة حتى ظهر: {time_str}\n"
+                f"⏱️️ المدة حتى ظهر: {time_str}\n"
                 f"🔄 عدد المحاولات: {attempt}\n"
                 f"-----------------------------------\n"
                 f"التفاصيل: {desc}\n"
@@ -128,7 +128,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.application.create_task(monitor_account(context, chat_id, username, start_time))
 
 def main():
-    TOKEN = "8830810802:AAFbv4TqX-DJT6uidBwz9aM4aA2cucl_tOo"
+    TOKEN = "8772895608:AAE-Ok7fM1UzPvreYeh5MQWMN5QMxqOAdo8"
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
