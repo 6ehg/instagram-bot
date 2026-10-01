@@ -87,7 +87,9 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             elif minutes > 0:
                 time_str = f"{minutes} دقيقة و {seconds} ثانية"
             else:
-                time_str = f"{seconds} ثانية"desc = profile_info.get("description", "لا توجد تفاصيل")
+                time_str = f"{seconds} ثانية'
+                
+                desc = profile_info.get("description", "لا توجد تفاصيل")
             
             if profile_info.get("verified"):
                 verified_badge = "نعم (موثق)"
