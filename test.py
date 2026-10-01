@@ -25,31 +25,41 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                 
                 if response and response.status == 404:
                     await browser.close()
-                    await asyncio.sleep(40)
+                    await asyncio.sleep(30)
                     attempt += 1
                     continue
                 
-                await page.wait_for_timeout(3000)
+                # الانتظار حتى يتحمل البروفايل قليلاً
+                await page.wait_for_timeout(2000)
                 
+                # إزالة أي نوافذ منسدلة، تسجيل دخول، أو إشعارات مزعجة بالكامل
                 try:
                     await page.evaluate("""() => {
-                        const overlays = document.querySelectorAll("div[role='dialog'], div._a23z, div._aacl, div._a8k_");
+                        // إزالة النوافذ والـ Dialogs
+                        const overlays = document.querySelectorAll("div[role='dialog'], div._a23z, div._aacl, div._a8k_, div[class*='x1n2onr6']");
                         overlays.forEach(el => el.remove());
                         
+                        // إزالة الطبقات الشفافة التي تمنع الرؤية
                         const semiTrans = document.querySelectorAll("div[style*='background-color']");
                         semiTrans.forEach(el => {
-                            if (window.getComputedStyle(el).backgroundColor.includes('rgba') || window.getComputedStyle(el).backgroundColor.includes('rgb')) {
+                            const bg = window.getComputedStyle(el).backgroundColor;
+                            if (bg.includes('rgba') || bg.includes('rgb')) {
                                 el.style.display = 'none';
                             }
                         });
                         
+                        // إعادة التمرير والتحكم بالصفحة
                         document.body.style.overflow = 'auto';
+                        document.documentElement.style.overflow = 'auto';
                     }""")
                 except Exception:
                     pass
                 
+                # ضغط زر Escape لإغلاق أي نافذة منبثقة إضافية
                 await page.keyboard.press("Escape")
-                await page.wait_for_timeout(1000)
+                
+                # الانتظار أقل من ثانية (مثلاً 500 ملي ثانية) لتستقر الصفحة وتصبح نظيفة تماماً قبل لقطة الشاشة
+                await page.wait_for_timeout(600)
                 
                 is_not_found = await page.evaluate("""() => {
                     const bodyText = document.body.innerText;
@@ -58,7 +68,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                 
                 if is_not_found:
                     await browser.close()
-                    await asyncio.sleep(40)
+                    await asyncio.sleep(30)
                     attempt += 1
                     continue
                 
@@ -71,8 +81,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                     } catch (e) {
                         return { description: "غير متوفر", verified: false };
                     }
-                }""")
-                
+                }""")# التقاط الصورة بعد تنظيف الشاشة واستقرارها
                 await page.screenshot(path=screenshot_path, full_page=False)
                 await browser.close()
                 
@@ -88,7 +97,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                 time_str = f"{minutes} دقيقة و {seconds} ثانية"
             else:
                 time_str = f"{seconds} ثانية"
-                
+            
             desc = profile_info.get("description", "لا توجد تفاصيل")
             
             if profile_info.get("verified"):
@@ -111,7 +120,7 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
             break
             
         except Exception:
-            await asyncio.sleep(40)
+            await asyncio.sleep(30)
             attempt += 1
             continue
 
@@ -138,18 +147,15 @@ async def run_bot(token):
     print(f"تم تشغيل البوت بنجاح برمز التوكن: {token[:10]}...")
 
 async def main():
-    # قائمة التوكنات للبوت الأول والثاني
     tokens = [
         "8772895608:AAE-Ok7fM1UzPvreYeh5MQWMN5QMxqOAdo8",
         "8782589049:AAER4f6gHzdUYcZ-Tvs859rmioeuTW6hn9U"
     ]
     
-    # تشغيل كلا البوتات معاً في نفس الوقت
     await asyncio.gather(*(run_bot(token) for token in tokens))
     
-    # إبقاء السكربت يعمل بشكل مستمر
     while True:
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.main() if hasattr(asyncio, "main") else asyncio.run(main())
