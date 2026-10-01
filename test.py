@@ -86,7 +86,9 @@ async def monitor_account(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user
                 await browser.close()
                 
             found_time = datetime.now()
-            total_duration = found_time - start_time total_seconds = int(total_duration.total_seconds())
+            total_duration = found_time - start_time 
+            total_seconds =
+            int(total_duration.total_seconds())
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
             seconds = total_seconds % 60
