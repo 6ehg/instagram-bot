@@ -113,7 +113,8 @@ async def main():
         "8505165316:AAGIOPf61KpHSwLUuJrYS_HDla7J21KMgIA",
         "8956798204:AAGlyC_Ygh3YPB4GcBD5ZO8J0uZlhR7JExM",
         "8588371425:AAGiJgzXg_bxks7hdoR8bLm26z9s0NOIC_c",
-        "8964756105:AAH4wa4yqm0cO1Zt3Y_lxIi5hEc6yc2KNMs"
+        "8964756105:AAH4wa4yqm0cO1Zt3Y_lxIi5hEc6yc2KNMs",
+        "8487717218:AAHEOFV-KJz8HJORsl4JvSWPBWxVFM3sqEg"
     ]
     
     await asyncio.gather(*(run_bot(token) for token in tokens))
