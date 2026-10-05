@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/track username"
     )
 
-# دالة الفحص المحدثة مع الحذف الفوري للنافذة المنبثقة (MutationObserver) لضمان صورة صافية 100%
+# دالة الفحص المحدثة مع الرادار المطور لإزالة النوافذ وطبقات التعتيم فوراً
 async def check_account_status(username):
     try:
         async with async_playwright() as p:
@@ -31,11 +31,14 @@ async def check_account_status(username):
             )
             page = await context_browser.new_page()
             
-            # حقن مراقب فوري يزيل النوافذ المنبثقة والخلفيات المعتمة جذرياً ولحظياً قبل أن تؤثر على الصورة
+            # حقن سكريبت متطور يعمل كالرادار لإبادة أي نافذة منبثقة أو طبقة تعتيم فور ظهورها
             await page.add_init_script("""
                 const observer = new MutationObserver((mutations) => {
-                    document.querySelectorAll("div[role='dialog'], div._acaz, div[class*='x1s85apg']").forEach(el => el.remove());
+                    document.querySelectorAll("div[role='dialog'], div._acaz, div[class*='x1s85apg'], div[class*='x78zum5'][style*='position: fixed']").forEach(el => {
+                        el.remove();
+                    });
                     document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
                 });
                 observer.observe(document, { childList: true, subtree: true });
             """)
@@ -47,20 +50,26 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # انتظار قصير لاستقرار الصفحة بعد الحذف اللحظي
-            await page.wait_for_timeout(1500)
+            # انتظار قصير جداً لضمان استقرار الصفحة بعد التنظيف الآلي
+            await page.wait_for_timeout(1000)
             
-            # تنظيف إضافي يدوي للتأكد التام
+            # تنفيذ تنظيف إضافي فوري عبر الـ evaluate للتأكد من خلو الصفحة تماماً
             try:
                 await page.evaluate("""() => {
-                    document.querySelectorAll("div[role='dialog'], div._acaz, div[class*='x1s85apg']").forEach(el => el.remove());
+                    document.querySelectorAll("div[role='dialog'], div._acaz, div[class*='x1s85apg'], div[class*='x78zum5'][style*='position: fixed']").forEach(el => el.remove());
+                    document.querySelectorAll('*').forEach(node => {
+                        const style = window.getComputedStyle(node);
+                        if (style.position === 'fixed' && (style.zIndex > 10 || style.backgroundColor.includes('rgba'))) {
+                            node.remove();
+                        }
+                    });
                     document.body.style.overflow = 'auto';
                     document.documentElement.style.overflow = 'auto';
                 }""")
             except Exception:
                 pass
             
-            # قراءة النصوص للتحقق من حالة الحساب
+            # فحص النصوص للتأكد من حالة الحساب
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
             
@@ -79,7 +88,7 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # استخراج معلومات الحساب الحقيقي
+            # استخراج بيانات الحساب
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -95,7 +104,7 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # التقاط صورة صافية، نقية ونظيفة تماماً خالية من أي نافذة منبثقة
+            # التقاط الصورة النهائية بوضوح تام وخالية تماماً من أي شوائب أو نوافذ
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
@@ -133,7 +142,7 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     f"🏅 حالة التوثيق: {verified_badge}\n"
                     f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱️️ مدة المراقبة: {hours} hours {minutes} minutes ({round(duration.total_seconds() / 3600, 2)} hours)\n\n"
+                    f"⏱️ مدة المراقبة: {hours} hours {minutes} minutes ({round(duration.total_seconds() / 3600, 2)} hours)\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
                 
@@ -166,9 +175,7 @@ async def monitor_account_background(chat_id, username, context, initial_message
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
-        return
-    
-    username = context.args[0].replace("@", "").strip()
+        returnusername = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
     status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
