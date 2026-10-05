@@ -92,7 +92,9 @@ async def check_account_status(username):
             # التقاط صورة واضحة تماماً مثل الكود الأول
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
-            await browser.close()return True, profile_info, screenshot_path
+            await browser.close()
+            return True, profile_info,
+            screenshot_path
             
     except Exception as e:
         return False, None, None
