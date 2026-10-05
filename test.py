@@ -180,9 +180,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_active:
             desc = info.get("description", "لا توجد تفاصيل")
             caption = f"👤 حساب @{username} شغال حالياً!\n📊 التفاصيل: {desc}"
-            with open(screenshot_path, "rb") as 
+            with open(screenshot_path, "rb")  as 
             photo:
-                await context.bot.send_photo(chat_id=chat_id,photo=photo,caption=caption)if os.path.exists(screenshot_path):
+                await context.bot.send_photo(chat_id=chat_id,photo=photo,caption=caption)
+                if os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
         else:
             await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
