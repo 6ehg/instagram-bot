@@ -96,7 +96,8 @@ async def monitor_account_background(chat_id, username, context, initial_message
     await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير فوراً عند عودته!")
     
     while True:
-        try:is_active, info, screenshot_path = await check_account_status(username)
+        try:
+            is_active, info, screenshot_path = await check_account_status(username)
             
             if is_active:
                 end_time = datetime.now()
