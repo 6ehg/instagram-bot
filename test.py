@@ -17,11 +17,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/track username"
     )
 
-# دالة الفحص الدقيقة مع ضبط دقة الشاشة والصورة لتكون واضحة تماماً (مثل الكود الأول)
+# دالة الفحص الدقيقة المدمجة بآلية الكود الأول لإخفاء النوافذ والوضوح التام
 async def check_account_status(username):
     try:
         async with async_playwright() as p:
-            # مطابقة إعدادات المتصفح تماماً للكود الأول لضمان وضوح الصورة
+            # إعدادات المتصفح بدقة الكود الأول تماماً لضمان وضوح الصورة
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
             page = await browser.new_page(viewport={"width": 1440, "height": 900})
             
@@ -35,7 +35,7 @@ async def check_account_status(username):
             # الانتظار حتى تظهر النافذة المزعجة
             await page.wait_for_timeout(3000)
             
-            # إغلاق ومسح النوافذ المنبثقة فوراً دون المساس بالمحتوى (نفس الكود الأول)
+            # آلية الكود الأول لإخفاء النوافذ المنبثقة فوراً دون المساس بالمحتوى
             try:
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
@@ -89,12 +89,10 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # التقاط الصورة مباشرة وبدون قص عشوائي لتخرج نظيفة وواضحة تماماً (نفس الكود الأول)
+            # التقاط صورة واضحة تماماً مثل الكود الأول
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
-            await browser.close()
-            
-            return True, profile_info, screenshot_path
+            await browser.close()return True, profile_info, screenshot_path
             
     except Exception as e:
         return False, None, None
@@ -121,13 +119,13 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 caption = (
                     f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 **اليوزر:** @{username}\n"
-                    f"🔗 **الرابط:** https://instagram.com/{username}\n"
-                    f"📊 **التفاصيل:** {desc}\n"
-                    f"🏅 **حالة التوثيق:** {verified_badge}\n"
-                    f"🕒 **بدء المراقبة:** {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 **وقت الظهور/الفتح:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ **مدة المراقبة:** {hours} hours {minutes} minutes\n\n"
+                    f"👤 اليوزر: @{username}\n"
+                    f"🔗 الرابط: https://instagram.com/{username}\n"
+                    f"📊 التفاصيل: {desc}\n"
+                    f"🏅 حالة التوثيق: {verified_badge}\n"
+                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
                 
@@ -181,8 +179,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             desc = info.get("description", "لا توجد تفاصيل")
             caption = f"👤 حساب @{username} شغال حالياً!\n📊 التفاصيل: {desc}"
             with open(screenshot_path, "rb") as photo:
-                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
-            if os.path.exists(screenshot_path):
+                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)if os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
         else:
             await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
@@ -191,7 +188,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def run_bot(token):
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("track", track_user))
+    app.add_handler(CommandHandler( "track", track_user))
     app.add_handler(CallbackQueryHandler(button_handler))
     
     await app.initialize()
