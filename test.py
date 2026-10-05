@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/track username"
     )
 
-# دالة الفحص الدقيقة (ترجع True فقط إذا كان الحساب شغالاً وموجوداً حقاً)
+# دالة الفحص المحدثة مع الحذف الفوري للنافذة المنبثقة (MutationObserver) لضمان صورة صافية 100%
 async def check_account_status(username):
     try:
         async with async_playwright() as p:
@@ -30,38 +30,37 @@ async def check_account_status(username):
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = await context_browser.new_page()
-            url = f"https://www.instagram.com/{username}/"
             
+            # حقن مراقب فوري يزيل النوافذ المنبثقة والخلفيات المعتمة جذرياً ولحظياً قبل أن تؤثر على الصورة
+            await page.add_init_script("""
+                const observer = new MutationObserver((mutations) => {
+                    document.querySelectorAll("div[role='dialog'], div._acaz, div[class*='x1s85apg']").forEach(el => el.remove());
+                    document.body.style.overflow = 'auto';
+                });
+                observer.observe(document, { childList: true, subtree: true });
+            """)
+            
+            url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=40000)
             
             if response and response.status >= 400:
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(3000)
+            # انتظار قصير لاستقرار الصفحة بعد الحذف اللحظي
+            await page.wait_for_timeout(1500)
             
-            # إغلاق وحذف النوافذ المنبثقة إن وجدت
+            # تنظيف إضافي يدوي للتأكد التام
             try:
                 await page.evaluate("""() => {
-                    const closeButton = document.querySelector("div[role='dialog'] button, div[role='dialog'] div[aria-label='Close'], button._acan");
-                    if (closeButton) { closeButton.click(); }
-                    
-                    const dialogs = document.querySelectorAll("div[role='dialog']");
-                    dialogs.forEach(el => el.remove());
-                    
-                    const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
-                    backdrops.forEach(el => el.remove());
-                    
+                    document.querySelectorAll("div[role='dialog'], div._acaz, div[class*='x1s85apg']").forEach(el => el.remove());
                     document.body.style.overflow = 'auto';
                     document.documentElement.style.overflow = 'auto';
                 }""")
             except Exception:
                 pass
             
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(1500)
-            
-            # قراءة النصوص للتأكد من عدم وجود رسائل تدل على أن الحساب غير متاح
+            # قراءة النصوص للتحقق من حالة الحساب
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
             
@@ -76,12 +75,11 @@ async def check_account_status(username):
             
             is_unavailable = any(phrase.lower() in page_content.lower() or phrase.lower() in page_text.lower() for phrase in not_available_phrases)
             
-            # إذا وجدنا عبارة تدل على أنه غير موجود أو محظور، نعتبره غير شغال
             if is_unavailable:
                 await browser.close()
                 return False, None, None
 
-            # استخراج معلومات الحساب الحقيقي للتأكد إضافياً
+            # استخراج معلومات الحساب الحقيقي
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -91,12 +89,13 @@ async def check_account_status(username):
                 } catch (e) {
                     return { description: "", verified: false };
                 }
-            }""")# شرط إضافي: إذا كان الوصف فارغاً تماماً أو يحتوي على رسائل خطأ، ليس حساباً نشطاً
+            }""")
+            
             if not profile_info.get("description") or "isn't available" in profile_info.get("description"):
                 await browser.close()
                 return False, None, None
 
-            # التقاط صورة للحساب الموجود حقيقة
+            # التقاط صورة صافية، نقية ونظيفة تماماً خالية من أي نافذة منبثقة
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
@@ -106,17 +105,16 @@ async def check_account_status(username):
     except Exception as e:
         return False, None, None
 
-# دالة المراقبة في الخلفية (تعمل بصمت تام إذا لم يكن الحساب موجوداً)
+# دالة المراقبة في الخلفية
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير فوراً عند عودته!")
+    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير وصورة صافية فوراً عند عودته!")
     
     while True:
         try:
             is_active, info, screenshot_path = await check_account_status(username)
             
             if is_active:
-                # الحساب شغال وموجود حقيقة!
                 end_time = datetime.now()
                 duration = end_time - start_time
                 total_seconds = int(duration.total_seconds())
@@ -135,7 +133,7 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     f"🏅 حالة التوثيق: {verified_badge}\n"
                     f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱️ مدة المراقبة: {hours} hours {minutes} minutes ({round(duration.total_seconds() / 3600, 2)} hours)\n\n"
+                    f"⏱️️ مدة المراقبة: {hours} hours {minutes} minutes ({round(duration.total_seconds() / 3600, 2)} hours)\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
                 
@@ -157,10 +155,9 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 with open("search_log.txt", "a", encoding="utf-8") as log_file:
                     log_file.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unbanned tracked @{username}\n")
                     
-                break # إنهاء حلقة المراقبة بنجاح
+                break
             
             else:
-                # الحساب ليس موجوداً أو عليه باند: ينتظر بصمت دون إزعاج ودون إرسال أي رسالة خاطئة
                 await asyncio.sleep(120)
                 
         except Exception as e:
