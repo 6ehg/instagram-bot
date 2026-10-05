@@ -12,12 +12,12 @@ from playwright.async_api import async_playwright
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "أهلاً بك في بوت مراقبة إنستغرام الذكي والمطور! 🕵️‍♂️✨\n\n"
-        "لبدء مراقبة حساب حتى يتم فك البند عنه وإرسال تقرير مفصل، أرسل الأمر هكذا:\n"
+        "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
+        "أرسل الأمر هكذا لمراقبة أي حساب بصمت حتى يفتح حقيقة:\n"
         "/track username"
     )
 
-# دالة فحص حالة الحساب فقط (للتأكد هل هو شغال أم لا)
+# دالة الفحص الدقيقة (ترجع True فقط إذا كان الحساب شغالاً وموجوداً حقاً)
 async def check_account_status(username):
     try:
         async with async_playwright() as p:
@@ -34,34 +34,69 @@ async def check_account_status(username):
             
             response = await page.goto(url, timeout=40000)
             
-            # إذا الصفحة غير موجودة أو فيها خطأ
             if response and response.status >= 400:
                 await browser.close()
-                return False, "غير متوفر", False
+                return False, None, None
 
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(3000)
             
-            # فحص إذا كان الحساب محذوفاً أو عليه باند واضح
-            content = await page.content()
-            is_banned = "Sorry, this page isn't available." in content or "عذراً، هذه الصفحة غير متوفرة." in content
+            # إغلاق وحذف النوافذ المنبثقة إن وجدت
+            try:
+                await page.evaluate("""() => {
+                    const closeButton = document.querySelector("div[role='dialog'] button, div[role='dialog'] div[aria-label='Close'], button._acan");
+                    if (closeButton) { closeButton.click(); }
+                    
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => el.remove());
+                    
+                    const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
+                    backdrops.forEach(el => el.remove());
+                    
+                    document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
+                }""")
+            except Exception:
+                pass
             
-            if is_banned:
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(1500)
+            
+            # قراءة النصوص للتأكد من عدم وجود رسائل تدل على أن الحساب غير متاح
+            page_content = await page.content()
+            page_text = await page.evaluate("() => document.body.innerText")
+            
+            not_available_phrases = [
+                "Profile isn't available",
+                "isn't available",
+                "Sorry, this page isn't available",
+                "عذراً، هذه الصفحة غير متوفرة",
+                "The link you followed may be broken",
+                "Page not found"
+            ]
+            
+            is_unavailable = any(phrase.lower() in page_content.lower() or phrase.lower() in page_text.lower() for phrase in not_available_phrases)
+            
+            # إذا وجدنا عبارة تدل على أنه غير موجود أو محظور، نعتبره غير شغال
+            if is_unavailable:
                 await browser.close()
-                return False, "الحساب محظور أو مغلق (Ban/Integrity)", False
+                return False, None, None
 
-            # استخراج معلومات الحساب إذا كان شغالاً
+            # استخراج معلومات الحساب الحقيقي للتأكد إضافياً
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
-                    let text = metaDes ? metaDes.content : "غير متوفر";
+                    let text = metaDes ? metaDes.content : "";
                     const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
                     return { description: text, verified: isVerified };
                 } catch (e) {
-                    return { description: "غير متوفر", verified: false };
+                    return { description: "", verified: false };
                 }
-            }""")
-            
-            # أخذ سكرين شوت للحالة النشطة
+            }""")# شرط إضافي: إذا كان الوصف فارغاً تماماً أو يحتوي على رسائل خطأ، ليس حساباً نشطاً
+            if not profile_info.get("description") or "isn't available" in profile_info.get("description"):
+                await browser.close()
+                return False, None, None
+
+            # التقاط صورة للحساب الموجود حقيقة
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
@@ -69,19 +104,19 @@ async def check_account_status(username):
             return True, profile_info, screenshot_path
             
     except Exception as e:
-        return False, str(e), False
+        return False, None, None
 
-# دالة المراقبة المستمرة في الخلفية
+# دالة المراقبة في الخلفية (تعمل بصمت تام إذا لم يكن الحساب موجوداً)
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} في الخلفية...\nسيتم إخبارك فوراً وإرسال التقرير عند فك البند عنه وعودته للعمل!")
+    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير فوراً عند عودته!")
     
     while True:
         try:
             is_active, info, screenshot_path = await check_account_status(username)
             
             if is_active:
-                # تم فك البند وأصبح الحساب نشطاً!
+                # الحساب شغال وموجود حقيقة!
                 end_time = datetime.now()
                 duration = end_time - start_time
                 total_seconds = int(duration.total_seconds())
@@ -91,15 +126,15 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 desc = info.get("description", "لا توجد تفاصيل")
                 verified_badge = "✅ نعم (موثق)" if info.get("verified") else "❌ لا (غير موثق)"
                 
-                # صياغة التقرير الاحترافي المطابق لصورتك
-                caption = (f"🎉 **تم فك البند عن الحساب!**\n"
+                caption = (
+                    f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"👤 اليوزر: @{username}\n"
                     f"🔗 الرابط: https://instagram.com/{username}\n"
                     f"📊 التفاصيل: {desc}\n"
                     f"🏅 حالة التوثيق: {verified_badge}\n"
                     f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 وقت فك البند: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"⏱️ مدة المراقبة: {hours} hours {minutes} minutes ({round(duration.total_seconds() / 3600, 2)} hours)\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
@@ -116,18 +151,16 @@ async def monitor_account_background(chat_id, username, context, initial_message
                         reply_markup=reply_markup
                     )
                 
-                # تنظيف الصورة المؤقتة
                 if os.path.exists(screenshot_path):
                     os.remove(screenshot_path)
                     
-                # حفظ في السجل
                 with open("search_log.txt", "a", encoding="utf-8") as log_file:
                     log_file.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unbanned tracked @{username}\n")
                     
-                break # الخروج وإيقاف المراقبة لأنه تم فك البند
+                break # إنهاء حلقة المراقبة بنجاح
             
             else:
-                # الحساب ما زال مغلقاً، ننتظر دقيقتين ثم نعاود الفحص
+                # الحساب ليس موجوداً أو عليه باند: ينتظر بصمت دون إزعاج ودون إرسال أي رسالة خاطئة
                 await asyncio.sleep(120)
                 
         except Exception as e:
@@ -142,8 +175,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
     status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
-    
-    # تشغيل المراقبة في الخلفية
     asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -153,7 +184,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("refresh_"):
         username = query.data.replace("refresh_", "")
         chat_id = query.message.chat_id
-        status_msg = await query.message.reply_text(f"🔄 جاري الفحص اليدوي السريع لـ @{username}...")
+        status_msg = await query.message.reply_text(f"🔄 جاري الفحص اليدوي لـ @{username}...")
         
         is_active, info, screenshot_path = await check_account_status(username)
         if is_active:
@@ -163,7 +194,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
             os.remove(screenshot_path)
         else:
-            await query.message.reply_text(f"❌ الحساب @{username} ما زال مغلقاً أو محظوراً حالياً.")
+            await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
         await status_msg.delete()
 
 async def run_bot(token):
@@ -178,7 +209,6 @@ async def run_bot(token):
     print(f"تم تشغيل البوت برمز التوكن: {token[:10]}...")
 
 async def main():
-    # جميع التوكنات الستة مدمجة هنا للعمل بالتوازي
     tokens = [
         "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U",
         "8505165316:AAGIOPf61KpHSwLUuJrYS_HDla7J21KMgIA",
