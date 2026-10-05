@@ -1,3 +1,4 @@
+
 import asyncio
 import os
 from datetime import datetime
@@ -13,7 +14,7 @@ from playwright.async_api import async_playwright
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "أرسل الأمر هكذا لمراقبة أي حساب بصمت حتى يفتح حقيقة:\n"
+        "أرسل الأمر هكذا لمراقبة أي حساب:\n"
         "/track username"
     )
 
@@ -50,10 +51,10 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # انتظار قصير جداً لضمان استقرار الصفحة بعد التنظيف الآلي
+            # انتظار قصير لضمان استقرار الصفحة بعد التنظيف الآلي
             await page.wait_for_timeout(1500)
             
-            # تنفيذ تنظيف إضافي فوري عبر الـ evaluate للتأكد من خلو الصفحة تماماً من أي طبقات حماية
+            # تنفيذ تنظيف إضافي فوري عبر الـ evaluate للتأكد من خلو الصفحة تماماً
             try:
                 await page.evaluate("""() => {
                     document.querySelectorAll("div[role='dialog'], div._acaz, div[class*='x1s85apg'], div[class*='x78zum5'][style*='position: fixed']").forEach(el => {
@@ -88,8 +89,9 @@ async def check_account_status(username):
             
             if is_unavailable:
                 await browser.close()
-                return False, None, None# استخراج بيانات الحساب
-            profile_info = await page.evaluate("""() => {
+                return False, None, None
+
+            # استخراج بيانات الحسابprofile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
                     let text = metaDes ? metaDes.content : "";
@@ -114,10 +116,9 @@ async def check_account_status(username):
     except Exception as e:
         return False, None, None
 
-# دالة المراقبة في الخلفية مع الحفاظ على النص المتصل والمنظم
+# دالة المراقبة في الخلفية
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير وصورة صافية فوراً عند عودته!")
     
     while True:
         try:
@@ -173,14 +174,36 @@ async def monitor_account_background(chat_id, username, context, initial_message
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر.مثال:\n/track elonmusk")
+        await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
         return
     
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
-    asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
+    status_message = await update.message.reply_text(f"🔍 جاري الفحص الفوري للحساب @{username}...")
+    
+    # فحص فوري لحظي عند إرسال الأمر لنعرف هل المتصفح يراه متاحاً أم لا
+    is_active, info, screenshot_path = await check_account_status(username)
+    
+    if is_active:
+        desc = info.get("description", "لا توجد تفاصيل")
+        verified_badge = "✅ نعم (موثق)" if info.get("verified") else "❌ لا (غير موثق)"
+        caption = (
+            "🎉 الحساب شغال ومتوفر حالياً!\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 اليوزر: @{username}\n"
+            f"🔗 الرابط: https://instagram.com/{username}\n"
+            f"📊 التفاصيل: {desc}\n"
+            f"🏅 حالة التوثيق: {verified_badge}"
+        )
+        with open(screenshot_path, "rb") as photo:
+            await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
+        if os.path.exists(screenshot_path):
+            os.remove(screenshot_path)
+        await status_message.delete()
+    else:
+        await status_message.edit_text(f"👀 تم بدء المراقبة بصمت لـ @{username}...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير وصورة صافية فوراً!")
+        asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -199,7 +222,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
             os.remove(screenshot_path)
         else:
-            await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
+            await query.message.reply_text(f"❌ الحساب @{username} يراه المتصفح غير متاح حالياً.")
         await status_msg.delete()
 
 async def run_bot(token):
