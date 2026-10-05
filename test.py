@@ -17,11 +17,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/track username"
     )
 
-# دالة الفحص الدقيقة المدمجة بآلية الكود الأول لإخفاء النوافذ والوضوح التام
 async def check_account_status(username):
     try:
         async with async_playwright() as p:
-            # إعدادات المتصفح بدقة الكود الأول تماماً لضمان وضوح الصورة
             browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
             page = await browser.new_page(viewport={"width": 1440, "height": 900})
             
@@ -32,10 +30,8 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # الانتظار حتى تظهر النافذة المزعجة
             await page.wait_for_timeout(3000)
             
-            # آلية الكود الأول لإخفاء النوافذ المنبثقة فوراً دون المساس بالمحتوى
             try:
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
@@ -50,11 +46,9 @@ async def check_account_status(username):
             except Exception:
                 pass
             
-            # ضغطة إضافية للتأكد من اختفاء أي أثر
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(1500)
             
-            # قراءة المحتوى للتأكد من حالة الحساب إن كان متاحاً حقاً
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
             
@@ -73,7 +67,6 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # استخراج معلومات الحساب بدقة
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -89,24 +82,21 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            # التقاط صورة واضحة تماماً مثل الكود الأول
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
             await browser.close()
-            return True, profile_info,
-            screenshot_path
+            
+            return True, profile_info, screenshot_path
             
     except Exception as e:
         return False, None, None
 
-# دالة المراقبة في الخلفية
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
     await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير فوراً عند عودته!")
     
     while True:
-        try:
-            is_active, info, screenshot_path = await check_account_status(username)
+        try:is_active, info, screenshot_path = await check_account_status(username)
             
             if is_active:
                 end_time = datetime.now()
@@ -180,11 +170,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_active:
             desc = info.get("description", "لا توجد تفاصيل")
             caption = f"👤 حساب @{username} شغال حالياً!\n📊 التفاصيل: {desc}"
-            with open(screenshot_path, "rb")  as 
-            photo:
-                await context.bot.send_photo(chat_id=chat_id,photo=photo,caption=caption)
-                if
-                os.path.exists(screenshot_path):
+            with open(screenshot_path, "rb") as photo:
+                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
+            if os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
         else:
             await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
@@ -193,7 +181,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def run_bot(token):
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler( "track", track_user))
+    app.add_handler(CommandHandler("track", track_user))
     app.add_handler(CallbackQueryHandler(button_handler))
     
     await app.initialize()
