@@ -1,6 +1,8 @@
 import asyncio
 import os
+import threading
 from datetime import datetime
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, 
@@ -10,6 +12,21 @@ from telegram.ext import (
 )
 from playwright.async_api import async_playwright
 
+# --- إعداد خادم ويب وهمي لكي لا تغلق المنصة التطبيق (Idle Timeout Fix) ---
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "Bot is running and active!"
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 8080))
+    web_app.run(host="0.0.0.0", port=port)
+
+# تشغيل خادم الويب في خلفية النظام بالتوازي مع البوتات
+threading.Thread(target=run_web_server, daemon=True).start()
+# -------------------------------------------------------------------------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
@@ -18,9 +35,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def check_account_status(username):
+    browser = None
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=["--disable-gpu"])
+            browser = await p.chromium.launch(
+                headless=True, 
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
+            )
             page = await browser.new_page(viewport={"width": 1440, "height": 900})
             
             url = f"https://www.instagram.com/{username}/"
@@ -36,10 +57,8 @@ async def check_account_status(username):
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
                     dialogs.forEach(el => el.style.display = 'none');
-                    
                     const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
                     backdrops.forEach(el => el.style.display = 'none');
-                    
                     document.body.style.overflow = 'auto';
                     document.documentElement.style.overflow = 'auto';
                 }""")
@@ -89,6 +108,11 @@ async def check_account_status(username):
             return True, profile_info, screenshot_path
             
     except Exception as e:
+        if browser:
+            try:
+                await browser.close()
+            except:
+                pass
         return False, None, None
 
 async def monitor_account_background(chat_id, username, context, initial_message):
@@ -169,8 +193,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         is_active, info, screenshot_path = await check_account_status(username)
         if is_active:
-            desc = info.get("description", "لا توجد تفاصيل")
-            caption = f"👤 حساب @{username} شغال حالياً!\n📊 التفاصيل: {desc}"
+            desc = info.get("description", "لا توجد تفاصيل")caption = f"👤 حساب @{username} شغال حالياً!\n📊 التفاصيل: {desc}"
             with open(screenshot_path, "rb") as photo:
                 await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
             if os.path.exists(screenshot_path):
@@ -197,9 +220,7 @@ async def main():
         "8956798204:AAGlyC_Ygh3YPB4GcBD5ZO8J0uZlhR7JExM",
         "8588371425:AAGiJgzXg_bxks7hdoR8bLm26z9s0NOIC_c",
         "8964756105:AAH4wa4yqm0cO1Zt3Y_lxIi5hEc6yc2KNMs",
-        "8895893464:AAHwVVR6G-oMoVqASqlKHCO6ldAvwD8JDck",
-        "8768802479:AAGpuu4nZVOsufoUgkUUAWqpw71Mz5K-jJw",
-        "8895893464:AAHwVVR6G-oMoVqASqlKHCO6ldAvwD8JDck"
+        "8487717218:AAHEOFV-KJz8HJORsl4JvSWPBWxVFM3sqEg"
     ]
     
     await asyncio.gather(*(run_bot(token) for token in tokens))
