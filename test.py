@@ -12,8 +12,11 @@ from telegram.ext import (
 )
 from playwright.async_api import async_playwright
 
-# --- ضع رقم الـ ID الخاص بك هنا (بدون أقواس إذا كان رقماً واحداً) ---
-ADMIN_USER_ID = 6836512592  # استبدل هذا الرقم برقم حسابك الحقيقي في تيليجرام
+# --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
+ADMIN_USER_ID = 6836512592
+
+# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
+INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
 
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
@@ -49,7 +52,21 @@ async def check_account_status(username):
                 headless=True, 
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
-            page = await browser.new_page(viewport={"width": 1440, "height": 900})
+            
+            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
+            context = await browser.new_context(viewport={"width": 1440, "height": 900})
+            await context.add_cookies([
+                {
+                    "name": "sessionid",
+                    "value": INSTAGRAM_SESSION_ID,
+                    "domain": ".instagram.com",
+                    "path": "/",
+                    "httpOnly": True,
+                    "secure": True
+                }
+            ])
+            
+            page = await context.new_page()
             
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
