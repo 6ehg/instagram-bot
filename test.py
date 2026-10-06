@@ -13,7 +13,7 @@ from telegram.ext import (
 from playwright.async_api import async_playwright
 
 # --- ضع رقم الـ ID الخاص بك هنا (بدون أقواس إذا كان رقماً واحداً) ---
-ADMIN_USER_ID = 123456789  # استبدل هذا الرقم برقم حسابك الحقيقي في تيليجرام
+ADMIN_USER_ID = [6836512592]  # استبدل هذا الرقم برقم حسابك الحقيقي في تيليجرام
 
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
