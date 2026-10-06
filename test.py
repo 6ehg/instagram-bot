@@ -12,20 +12,19 @@ from telegram.ext import (
 )
 from playwright.async_api import async_playwright
 
-# --- إعداد خادم ويب وهمي لكي لا تغلق المنصة التطبيق (Idle Timeout Fix) ---
+# --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "Bot is running and active!"
+    return "Bots are running and active!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host="0.0.0.0", port=port)
 
-# تشغيل خادم الويب في خلفية النظام بالتوازي مع البوتات
 threading.Thread(target=run_web_server, daemon=True).start()
-# -------------------------------------------------------------------------
+# ---------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -141,7 +140,7 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     f"📊 التفاصيل: {desc}\n"
                     f"🏅 حالة التوثيق: {verified_badge}\n"
                     f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/فتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
@@ -160,9 +159,6 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 
                 if os.path.exists(screenshot_path):
                     os.remove(screenshot_path)
-                    
-                with open("search_log.txt", "a", encoding="utf-8") as log_file:
-                    log_file.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unbanned tracked @{username}\n")
                     
                 break
             else:
@@ -216,6 +212,7 @@ async def run_bot(token):
 
 async def main():
     tokens = [
+        "8487717218:AAHEOFV-KJz8HJORsl4JvSWPBWxVFM3sqEg",
         "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U"
     ]
     
@@ -225,4 +222,4 @@ async def main():
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.main(main()) if hasattr(asyncio, 'main') else asyncio.run(main())
