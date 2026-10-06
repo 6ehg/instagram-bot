@@ -15,9 +15,8 @@ from playwright.async_api import async_playwright
 # --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
 ADMIN_USER_ID = 6836512592
 
-# --- الـ sessionid (اتركه فارغاً "" إذا أردت تشغيله مثل الكود الأول لتجنب حظر اليوزرات التي بها _) ---
-INSTAGRAM_SESSION_ID = ""
-
+# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
+INSTAGRAM_SESSION_ID = "25398016043%3Al7fxE2PsOujNBC%3A18%3AAYkgwvtgsKzr1Wldp5PMK_ysivvYhvgSb849ahu6hg"
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
@@ -53,23 +52,18 @@ async def check_account_status(username):
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
             
-            context = await browser.new_context(
-                viewport={"width": 1440, "height": 900},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            
-            # حقن الكوكيز فقط إذا تم وضع قيمة صحيحة لـ INSTAGRAM_SESSION_ID
-            if INSTAGRAM_SESSION_ID.strip():
-                await context.add_cookies([
-                    {
-                        "name": "sessionid",
-                        "value": INSTAGRAM_SESSION_ID,
-                        "domain": ".instagram.com",
-                        "path": "/",
-                        "httpOnly": True,
-                        "secure": True
-                    }
-                ])
+            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
+            context = await browser.new_context(viewport={"width": 1440, "height": 900})
+            await context.add_cookies([
+                {
+                    "name": "sessionid",
+                    "value": INSTAGRAM_SESSION_ID,
+                    "domain": ".instagram.com",
+                    "path": "/",
+                    "httpOnly": True,
+                    "secure": True
+                }
+            ])
             
             page = await context.new_page()
             
@@ -165,13 +159,13 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 caption = (
                     f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 **اليوزر:** @{username}\n"
-                    f"🔗 **الرابط:** https://instagram.com/{username}\n"
-                    f"📊 **التفاصيل:** {desc}\n"
-                    f"🏅 **حالة التوثيق:** {verified_badge}\n"
-                    f"🕒 **بدء المراقبة:** {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 **وقت الظهور/الفتح:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ **مدة المراقبة:** {hours} hours {minutes} minutes\n\n"
+                    f"👤 اليوزر: @{username}\n"
+                    f"🔗 الرابط: https://instagram.com/{username}\n"
+                    f"📊 التفاصيل: {desc}\n"
+                    f"🏅 حالة التوثيق: {verified_badge}\n"
+                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
                 
