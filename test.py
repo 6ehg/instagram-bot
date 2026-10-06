@@ -160,13 +160,13 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 caption = (
                     f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 **اليوزر:** @{username}\n"
-                    f"🔗 **الرابط:** https://instagram.com/{username}\n"
-                    f"📊 **التفاصيل:** {desc}\n"
-                    f"🏅 **حالة التوثيق:** {verified_badge}\n"
-                    f"🕒 **بدء المراقبة:** {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 **وقت الظهور/الفتح:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ **مدة المراقبة:** {hours} hours {minutes} minutes\n\n"
+                    f"👤 اليوزر: @{username}\n"
+                    f"🔗 الرابط: https://instagram.com/{username}\n"
+                    f"📊 التفاصيل: {desc}\n"
+                    f"🏅 حالة التوثيق: {verified_badge}\n"
+                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
                 
