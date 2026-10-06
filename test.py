@@ -15,7 +15,7 @@ from playwright.async_api import async_playwright
 # --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
 ADMIN_USER_ID = 6836512592
 
-# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
+# --- الـ sessionid الخاص بحسابك الوهمي ---
 INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
 
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
@@ -53,7 +53,6 @@ async def check_account_status(username):
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
             
-            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
             context = await browser.new_context(viewport={"width": 1440, "height": 900})
             await context.add_cookies([
                 {
@@ -71,12 +70,14 @@ async def check_account_status(username):
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
             
-            if response and response.status >= 400:
+            # إذا كان الاستجابة 404 (الصفحة غير موجودة نهائياً من انستغرام)
+            if response and response.status == 404:
                 await browser.close()
                 return False, None, None
 
             await page.wait_for_timeout(3000)
             
+            # محاولة إزالة أي نوافذ منبثقة تعيق القراءة
             try:
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
@@ -95,21 +96,20 @@ async def check_account_status(username):
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
             
+            # عبارات الحظر الصريحة فقط للصفحات المحذوفة فعلياً
             not_available_phrases = [
-                "Profile isn't available",
-                "isn't available",
                 "Sorry, this page isn't available",
-                "عذراً، هذه الصفحة غير متوفرة",
                 "The link you followed may be broken",
-                "Page not found"
+                "عذراً، هذه الصفحة غير متوفرة"
             ]
             
-            is_unavailable = any(phrase.lower() in page_content.lower() or phrase.lower() in page_text.lower() for phrase in not_available_phrases)
+            is_unavailable = any(phrase.lower() in page_content.lower() for phrase in not_available_phrases)
             
             if is_unavailable:
                 await browser.close()
                 return False, None, None
 
+            # استخراج معلومات الحساب (مع دعم مرن لليوزرات التي تحتوي على رموز خاصة)
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -117,13 +117,13 @@ async def check_account_status(username):
                     const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
                     return { description: text, verified: isVerified };
                 } catch (e) {
-                    return { description: "", verified: false };
+                    return { description: "حساب موجود على إنستغرام", verified: false };
                 }
             }""")
             
-            if not profile_info.get("description") or "isn't available" in profile_info.get("description"):
-                await browser.close()
-                return False, None, None
+            # إذا لم يتم العثور على الوصف ولكن الصفحة فتحت بشكل طبيعي ولا يوجد خطأ 404، نعتبر الحساب موجوداً
+            if not profile_info.get("description"):
+                profile_info["description"] = f"حساب نشط: @{username}"
 
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
@@ -160,13 +160,13 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 caption = (
                     f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 اليوزر: @{username}\n"
-                    f"🔗 الرابط: https://instagram.com/{username}\n"
-                    f"📊 التفاصيل: {desc}\n"
-                    f"🏅 حالة التوثيق: {verified_badge}\n"
-                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
+                    f"👤 **اليوزر:** @{username}\n"
+                    f"🔗 **الرابط:** https://instagram.com/{username}\n"
+                    f"📊 **التفاصيل:** {desc}\n"
+                    f"🏅 **حالة التوثيق:** {verified_badge}\n"
+                    f"🕒 **بدء المراقبة:** {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 **وقت الظهور/الفتح:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"⏱ **مدة المراقبة:** {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
                 
@@ -257,4 +257,4 @@ async def main():
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.main(main())
