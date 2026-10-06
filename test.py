@@ -257,4 +257,4 @@ async def main():
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    asyncio.main(main())
+    asyncio.run(main())
