@@ -1,9 +1,7 @@
 import asyncio
 import os
 import json
-import threading
 from datetime import datetime
-from flask import Flask
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, 
@@ -23,20 +21,6 @@ INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXc
 DATA_FILE = "tracking_data.json"
 active_tasks = {}
 
-# --- سيرفر بسيط لمنع إغلاق المنصة ---
-web_app = Flask(__name__)
-
-@web_app.route('/')
-def home():
-    return "Bot is active!"
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 8080))
-    web_app.run(host="0.0.0.0", port=port)
-
-threading.Thread(target=run_web_server, daemon=True).start()
-# ---------------------------------------------
-
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
@@ -54,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ALLOWED_USER_IDS:
         return
     await update.message.reply_text(
-        "أهلاً بك! بوت مراقبة إنستغرام (تنبيه عند الإغلاق وعند العودة).\n\n"
+        "أهلاً بك! بوت مراقبة إنستغرام جاهز للعمل.\n\n"
         "الأوامر:\n"
         "• /track [يوزر] : لبدء المراقبة\n"
         "• /stop [يوزر] : لإيقاف المراقبة\n"
@@ -129,15 +113,14 @@ async def monitor_account_background(chat_id, username, context):
                 
             last_status = current_data[username].get("last_status")
 
-            # 1. إذا الحساب كان شغال وفجأة تغلق/تبند
+            # إذا الحساب أُغلق
             if not is_active and last_status == "active":
                 caption = f"🚨 **تنبيه: تم إغلاق/بند الحساب!**\n🔗 https://instagram.com/{username}"
                 await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode="Markdown")
-                
                 current_data[username]["last_status"] = "inactive"
                 save_data(current_data)
 
-            # 2. إذا الحساب كان مقفول ورجع اشتغل
+            # إذا الحساب عاد للعمل
             elif is_active and last_status == "inactive":
                 caption = f"🎉 **تم فك البند ورجع الحساب للعمل بنجاح!**\n🔗 https://instagram.com/{username}"
                 
@@ -151,7 +134,7 @@ async def monitor_account_background(chat_id, username, context):
                 current_data[username]["last_status"] = "active"
                 save_data(current_data)
 
-            await asyncio.sleep(120)  # يفحص كل دقيقتين
+            await asyncio.sleep(120)
             
     except asyncio.CancelledError:
         pass
@@ -171,7 +154,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ الحساب @{username} قيد المراقبة بالفعل!")
         return
 
-    # فحص أولي لمعرفة حالته الحالية عند البدء
     is_active, _ = await check_account_status(username)
     initial_status = "active" if is_active else "inactive"
 
@@ -187,8 +169,8 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task = asyncio.create_task(monitor_account_background(chat_id, username, context))
     active_tasks[username] = task
 
-    status_text = "يعمل حالياً ✅" if is_active else "مغلق/مبدأ حالياً ❌"
-    await update.message.reply_text(f"👀 تمت إضافة الحساب @{username} للمراقبة!\nالحالة الآن: {status_text}\nسأبلغك فوراً إذا تغيرت حالته (سواء أغلق أو عاد للعمل).")
+    status_text = "يعمل حالياً ✅" else "مغلق/مبند حالياً ❌"
+    await update.message.reply_text(f"👀 تمت إضافة الحساب @{username} للمراقبة!\nالحالة الآن: {status_text}")
 
 async def stop_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ALLOWED_USER_IDS:
