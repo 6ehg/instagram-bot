@@ -13,7 +13,7 @@ from telegram.ext import (
 from playwright.async_api import async_playwright
 
 # --- ضع رقم الـ ID الخاص بك هنا (بين علامتي التنصيص أو كأرقام) ---
-ADMIN_USER_ID = 6836512592  # استبدل هذا الرقم برقم حسابك الحقيقي في تيليجرام
+ADMIN_USER_ID = [6836512592]  # استبدل هذا الرقم برقم حسابك الحقيقي في تيليجرام
 
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
@@ -104,15 +104,22 @@ async def check_account_status(username):
                     return { description: "", verified: false };
                 }
             }""")
-           if not profile_info.get("description") or "isn't available" in profile_info.get("description"):
+           if not profile_info.get("description") or 
+        "isn't available" in 
+        profile_info.get("description"):
                 await browser.close()
                 return False, None, None
 
-            screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
-            await page.screenshot(path=screenshot_path, full_page=False)
+            screenshot_path = 
+        f"active_{username}
+        _{int(datetime.now().timestamp())}.png"
+            await 
+        page.screenshot(path=screenshot_path
+                        , full_page=False)
             await browser.close()
             
-            return True, profile_info, screenshot_path
+            return True, profile_info,
+        screenshot_path
             
     except Exception as e:
         if browser:
