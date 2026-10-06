@@ -246,8 +246,7 @@ async def run_bot(token):
 
 async def main():
     tokens = [
-        "8487717218:AAHEOFV-KJz8HJORsl4JvSWPBWxVFM3sqEg",
-        "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U"
+        "8487717218:AAHEOFV-KJz8HJORsl4JvSWPBWxVFM3sqEg"
     ]
     
     await asyncio.gather(*(run_bot(token) for token in tokens))
