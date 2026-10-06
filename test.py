@@ -1,5 +1,6 @@
 import asyncio
 import os
+import json
 import threading
 from datetime import datetime
 from flask import Flask
@@ -15,8 +16,13 @@ from playwright.async_api import async_playwright
 # --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
 ADMIN_USER_ID = 6836512592
 
-# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
-INSTAGRAM_SESSION_ID = "25398016043%3Al7fxE2PsOujNBC%3A18%3AAYkgwvtgsKzr1Wldp5PMK_ysivvYhvgSb849ahu6hg"
+# --- الـ sessionid الخاص بحسابك الوهمي ---
+INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
+
+# --- ملف لحفظ الحسابات قيد المراقبة لضمان عدم ضياعها عند إعادة التشغيل ---
+DATA_FILE = "tracking_data.json"
+active_tasks = {}  # لتخزين مهام الـ asyncio النشطة
+
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
@@ -31,6 +37,19 @@ def run_web_server():
 threading.Thread(target=run_web_server, daemon=True).start()
 # ---------------------------------------------
 
+def load_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_USER_ID:
@@ -38,9 +57,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(
-        "أهلاً بك يا مالكي في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "أرسل الأمر هكذا لمراقبة أي حساب بصمت حتى يفتح:\n"
-        "/track username"
+        "أهلاً بك يا مالكي في بوت مراقبة إنستغرام المطوّر! 🕵️‍♂️✨\n\n"
+        " الأوامر المتاحة:\n"
+        "• /track username - لبدء مراقبة حساب\n"
+        "• /stop username - لإيقاف مراقبة حساب\n"
+        "• /list - لعرض الحسابات قيد المراقبة حالياً"
     )
 
 async def check_account_status(username):
@@ -52,7 +73,6 @@ async def check_account_status(username):
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
             
-            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
             context = await browser.new_context(viewport={"width": 1440, "height": 900})
             await context.add_cookies([
                 {
@@ -66,7 +86,6 @@ async def check_account_status(username):
             ])
             
             page = await context.new_page()
-            
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
             
@@ -95,12 +114,9 @@ async def check_account_status(username):
             page_text = await page.evaluate("() => document.body.innerText")
             
             not_available_phrases = [
-                "Profile isn't available",
-                "isn't available",
-                "Sorry, this page isn't available",
-                "عذراً، هذه الصفحة غير متوفرة",
-                "The link you followed may be broken",
-                "Page not found"
+                "Profile isn't available", "isn't available", 
+                "Sorry, this page isn't available", "عذراً، هذه الصفحة غير متوفرة", 
+                "The link you followed may be broken", "Page not found"
             ]
             
             is_unavailable = any(phrase.lower() in page_content.lower() or phrase.lower() in page_text.lower() for phrase in not_available_phrases)
@@ -140,61 +156,73 @@ async def check_account_status(username):
 
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير فوراً عند عودته!")
+    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر أي تغيير في حالته (فتح/قفل)!")
     
-    while True:
-        try:
+    # حفظ في قاعدة البيانات المحلية
+    data = load_data()
+    data[username] = {
+        "chat_id": chat_id,
+        "start_time": start_time.strftime('%Y-%m-%d %H:%M:%S'),
+        "last_status": None  # لم نحدد حالته بعد
+    }
+    save_data(data)
+
+    try:
+        while True:
             is_active, info, screenshot_path = await check_account_status(username)
+            current_data = load_data()
             
-            if is_active:
-                end_time = datetime.now()
-                duration = end_time - start_time
-                total_seconds = int(duration.total_seconds())
-                hours = total_seconds // 3600
-                minutes = (total_seconds % 3600) // 60
+            # إذا تم حذف الحساب من القائمة عبر أمر /stop
+            if username not in current_data:
+                break
                 
+            last_status = current_data[username].get("last_status")
+
+            # الحالة الأولى: الحساب أصبح نشطاً (كان مقفلاً وصار مفتوحاً)
+            if is_active and last_status != "active":
+                end_time = datetime.now()
                 desc = info.get("description", "لا توجد تفاصيل")
                 verified_badge = "✅ نعم (موثق)" if info.get("verified") else "❌ لا (غير موثق)"
                 
                 caption = (
-                    f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
+                    f"🎉 **تنبيه: تم فك البند أو فتح الحساب @{username}!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 اليوزر: @{username}\n"
-                    f"🔗 الرابط: https://instagram.com/{username}\n"
-                    f"📊 التفاصيل: {desc}\n"
-                    f"🏅 حالة التوثيق: {verified_badge}\n"
-                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
-                    f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
+                    f"🔗 **الرابط:** https://instagram.com/{username}\n"
+                    f"📊 **التفاصيل:** {desc}\n"
+                    f"🏅 **حالة التوثيق:** {verified_badge}\n"
+                    f"🔓 **وقت الفتح:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 )
                 
-                keyboard = [[InlineKeyboardButton("🔄 فحص مرة أخرى", callback_data=f"refresh_{username}")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-
                 with open(screenshot_path, "rb") as photo:
-                    await context.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=photo,
-                        caption=caption,
-                        parse_mode="Markdown",
-                        reply_markup=reply_markup
-                    )
+                    await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption, parse_mode="Markdown")
                 
                 if os.path.exists(screenshot_path):
                     os.remove(screenshot_path)
-                    
-                break
-            else:
-                await asyncio.sleep(120)
                 
-        except Exception as e:
+                # تحديث الحالة إلى نشط
+                current_data[username]["last_status"] = "active"
+                save_data(current_data)
+
+            # الحالة الثانية: الحساب قفل أو تبند (كان مفتوحاً وصار مقفلاً)
+            elif not is_active and last_status == "active":
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"⚠️️ **تنبيه خطير:** الحساب @{username} تم قفله أو تبنده الآن! 🚨",
+                    parse_mode="Markdown"
+                )
+                current_data[username]["last_status"] = "inactive"
+                save_data(current_data)
+
             await asyncio.sleep(120)
+            
+    except asyncio.CancelledError:
+        # عند إيقاف المهمة يدوياً
+        pass
+    except Exception as e:
+        await asyncio.sleep(120)
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != ADMIN_USER_ID:
-        await update.message.reply_text("عذراً، هذا الأمر مخصص لمالك البوت فقط! ❌")
+    if update.effective_user.id != ADMIN_USER_ID:
         return
 
     if not context.args:
@@ -204,40 +232,59 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
-    asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
-    if user_id != ADMIN_USER_ID:
-        await query.answer("هذا الزر ليس لك!", show_alert=True)
+    if username in active_tasks and not active_tasks[username].done():
+        await update.message.reply_text(f"⚠️ الحساب @{username} قيد المراقبة بالفعل!")
         return
 
-    await query.answer()
+    status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
+    task = asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
+    active_tasks[username] = task
+
+async def stop_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_USER_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("الرجاء كتابة اليوزر المراد إيقافه. مثال:\n/stop elonmusk")
+        return
     
-    if query.data.startswith("refresh_"):
-        username = query.data.replace("refresh_", "")
-        chat_id = query.message.chat_id
-        status_msg = await query.message.reply_text(f"🔄 جاري الفحص اليدوي لـ @{username}...")
-        
-        is_active, info, screenshot_path = await check_account_status(username)
-        if is_active:
-            desc = info.get("description", "لا توجد تفاصيل")
-            caption = f"👤 حساب @{username} شغال حالياً!\n📊 التفاصيل: {desc}"
-            with open(screenshot_path, "rb") as photo:
-                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
-            if os.path.exists(screenshot_path):
-                os.remove(screenshot_path)
-        else:
-            await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
-        await status_msg.delete()
+    username = context.args[0].replace("@", "").strip()
+    
+    # إيقاف المهمة الفعالة إن وجدت
+    if username in active_tasks:
+        active_tasks[username].cancel()
+        del active_tasks[username]
+    
+    # حذف من ملف الحفظ
+    data = load_data()
+    if username in data:
+        del data[username]
+        save_data(data)
+        await update.message.reply_text(f"🛑 تم إيقاف مراقبة الحساب @{username} بنجاح.")
+    else:
+        await update.message.reply_text(f"⚠️ الحساب @{username} غير موجود في قائمة المراقبة.")
+
+async def list_tracked(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_USER_ID:
+        return
+
+    data = load_data()
+    if not data:
+        await update.message.reply_text("📁 لا توجد أي حسابات قيد المراقبة حالياً.")
+        return
+    
+    msg = "📋 **قائمة الحسابات قيد المراقبة:**\n━━━━━━━━━━━━━━━━━━━\n"
+    for username, info in data.items():
+        msg += f"• @{username}\n  🕒 بدأ في: {info.get('start_time')}\n\n"
+    
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def run_bot(token):
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CommandHandler("stop", stop_user))
+    app.add_handler(CommandHandler("list", list_tracked))
     
     await app.initialize()
     await app.start()
@@ -249,6 +296,9 @@ async def main():
         "8487717218:AAHEOFV-KJz8HJORsl4JvSWPBWxVFM3sqEg",
         "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U"
     ]
+    
+    # استئناف المراقبة للحسابات المحفوظة مسبقاً في حال أُعيد تشغيل السكربت
+    # (يمكنك تفعيل الاستئناف التلقائي هنا لاحقاً إذا احتجت)
     
     await asyncio.gather(*(run_bot(token) for token in tokens))
     
