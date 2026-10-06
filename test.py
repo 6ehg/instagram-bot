@@ -70,46 +70,36 @@ async def check_account_status(username):
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
             
-            # إذا كان الاستجابة 404 (الصفحة غير موجودة نهائياً من انستغرام)
             if response and response.status == 404:
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(3000)
-            
-            # محاولة إزالة أي نوافذ منبثقة تعيق القراءة
-            try:
-                await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog']");
-                    dialogs.forEach(el => el.style.display = 'none');
-                    const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
-                    backdrops.forEach(el => el.style.display = 'none');
-                    document.body.style.overflow = 'auto';
-                    document.documentElement.style.overflow = 'auto';
-                }""")
-            except Exception:
-                pass
-            
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(4000)
             
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
             
-            # عبارات الحظر الصريحة فقط للصفحات المحذوفة فعلياً
+            # التحقق مما إذا تم توجيه المتصفح لصفحة تسجيل الدخول الإجبارية
+            login_indicators = [
+                "Log into Instagram",
+                "Phone number, username, or email",
+                "See everyday moments from your close friends"
+            ]
+            if any(ind.lower() in page_content.lower() for ind in login_indicators):
+                await browser.close()
+                return False, None, None
+
+            # عبارات الحظر الصريحة
             not_available_phrases = [
                 "Sorry, this page isn't available",
                 "The link you followed may be broken",
                 "عذراً، هذه الصفحة غير متوفرة"
             ]
             
-            is_unavailable = any(phrase.lower() in page_content.lower() for phrase in not_available_phrases)
-            
-            if is_unavailable:
+            if any(phrase.lower() in page_content.lower() for phrase in not_available_phrases):
                 await browser.close()
                 return False, None, None
 
-            # استخراج معلومات الحساب (مع دعم مرن لليوزرات التي تحتوي على رموز خاصة)
             profile_info = await page.evaluate("""() => {
                 try {
                     const metaDes = document.querySelector('meta[property="og:description"]');
@@ -117,12 +107,14 @@ async def check_account_status(username):
                     const isVerified = document.querySelector("svg[aria-label='Verified']") !== null;
                     return { description: text, verified: isVerified };
                 } catch (e) {
-                    return { description: "حساب موجود على إنستغرام", verified: false };
+                    return { description: "", verified: false };
                 }
             }""")
             
-            # إذا لم يتم العثور على الوصف ولكن الصفحة فتحت بشكل طبيعي ولا يوجد خطأ 404، نعتبر الحساب موجوداً
-            if not profile_info.get("description"):
+            # التأكد من وجود وصف حقيقي أو محتوى بروفایل صالح وعدم قبول الوصف الفارغ الذي يخص صفحات تسجيل الدخول
+            desc = profile_info.get("description", "")
+            if not desc or "Log in" in desc or "Instagram" == desc:
+                # محاولة جلب الوصف من عنصر الـ h1 أو العنوان إن وجد
                 profile_info["description"] = f"حساب نشط: @{username}"
 
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
