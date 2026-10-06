@@ -15,9 +15,8 @@ from playwright.async_api import async_playwright
 # --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
 ADMIN_USER_ID = 6836512592
 
-# --- الـ sessionid الخاص بك (سيعمل بكفاءة مع تجاوز مشكلة الشرطات _) ---
-INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
-
+# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
+INSTAGRAM_SESSION_ID = "25398016043%3Al7fxE2PsOujNBC%3A18%3AAYkgwvtgsKzr1Wldp5PMK_ysivvYhvgSb849ahu6hg"
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
@@ -39,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(
-        "أهلاً بك يا مالكي في بوت مراقبة إنستغرام الذكي مع الكوكيز وتجاوز الشرطات! 🕵️‍♂️✨\n\n"
+        "أهلاً بك يا مالكي في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
         "أرسل الأمر هكذا لمراقبة أي حساب بصمت حتى يفتح:\n"
         "/track username"
     )
@@ -50,40 +49,23 @@ async def check_account_status(username):
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True, 
-                args=[
-                    "--no-sandbox", 
-                    "--disable-setuid-sandbox", 
-                    "--disable-gpu", 
-                    "--disable-dev-shm-usage",
-                    "--disable-blink-features=AutomationControlled" # ضروري لإخفاء الأتمتة وقراءة الشرطات _
-                ]
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
             
-            # إعداد السياق مع الـ User-Agent الحقيقي ولغة المتصفح لتجاوز حظر الـ sessionid للشرطات
-            context = await browser.new_context(
-                viewport={"width": 1440, "height": 900},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                locale="en-US,en;q=0.9",
-                timezone_id="America/New_York"
-            )
-            
-            # حقن الكوكيز الخاصة بك
-            if INSTAGRAM_SESSION_ID.strip():
-                await context.add_cookies([
-                    {
-                        "name": "sessionid",
-                        "value": INSTAGRAM_SESSION_ID,
-                        "domain": ".instagram.com",
-                        "path": "/",
-                        "httpOnly": True,
-                        "secure": True
-                    }
-                ])
+            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
+            context = await browser.new_context(viewport={"width": 1440, "height": 900})
+            await context.add_cookies([
+                {
+                    "name": "sessionid",
+                    "value": INSTAGRAM_SESSION_ID,
+                    "domain": ".instagram.com",
+                    "path": "/",
+                    "httpOnly": True,
+                    "secure": True
+                }
+            ])
             
             page = await context.new_page()
-            
-            # إخفاء بصمة البوت عن انستغرام تماماً لكي لا يحجب اليوزرات التي بها _
-            await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
@@ -92,7 +74,7 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(3500)
+            await page.wait_for_timeout(3000)
             
             try:
                 await page.evaluate("""() => {
@@ -177,13 +159,13 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 caption = (
                     f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 **اليوزر:** @{username}\n"
-                    f"🔗 **الرابط:** https://instagram.com/{username}\n"
-                    f"📊 **التفاصيل:** {desc}\n"
-                    f"🏅 **حالة التوثيق:** {verified_badge}\n"
-                    f"🕒 **بدء المراقبة:** {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 **وقت الظهور/الفتح:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ **مدة المراقبة:** {hours} hours {minutes} minutes\n\n"
+                    f"👤 اليوزر: @{username}\n"
+                    f"🔗 الرابط: https://instagram.com/{username}\n"
+                    f"📊 التفاصيل: {desc}\n"
+                    f"🏅 حالة التوثيق: {verified_badge}\n"
+                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
                 
