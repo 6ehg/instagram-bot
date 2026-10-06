@@ -169,7 +169,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task = asyncio.create_task(monitor_account_background(chat_id, username, context))
     active_tasks[username] = task
 
-    status_text = "يعمل حالياً ✅" else "مغلق/مبند حالياً ❌"
+    status_text = "يعمل حالياً ✅" if is_active else "مغلق/مبند حالياً ❌"
     await update.message.reply_text(f"👀 تمت إضافة الحساب @{username} للمراقبة!\nالحالة الآن: {status_text}")
 
 async def stop_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
