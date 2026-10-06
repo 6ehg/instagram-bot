@@ -15,7 +15,7 @@ from playwright.async_api import async_playwright
 # --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
 ADMIN_USER_ID = 6836512592
 
-# --- الـ sessionid الخاص بحسابك الوهمي ---
+# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
 INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
 
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
@@ -53,6 +53,7 @@ async def check_account_status(username):
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
             
+            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
             context = await browser.new_context(viewport={"width": 1440, "height": 900})
             await context.add_cookies([
                 {
@@ -70,33 +71,42 @@ async def check_account_status(username):
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
             
-            if response and response.status == 404:
+            if response and response.status >= 400:
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(4000)
+            await page.wait_for_timeout(3000)
+            
+            try:
+                await page.evaluate("""() => {
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => el.style.display = 'none');
+                    const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
+                    backdrops.forEach(el => el.style.display = 'none');
+                    document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
+                }""")
+            except Exception:
+                pass
+            
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(1500)
             
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
             
-            # التحقق مما إذا تم توجيه المتصفح لصفحة تسجيل الدخول الإجبارية
-            login_indicators = [
-                "Log into Instagram",
-                "Phone number, username, or email",
-                "See everyday moments from your close friends"
-            ]
-            if any(ind.lower() in page_content.lower() for ind in login_indicators):
-                await browser.close()
-                return False, None, None
-
-            # عبارات الحظر الصريحة
             not_available_phrases = [
+                "Profile isn't available",
+                "isn't available",
                 "Sorry, this page isn't available",
+                "عذراً، هذه الصفحة غير متوفرة",
                 "The link you followed may be broken",
-                "عذراً، هذه الصفحة غير متوفرة"
+                "Page not found"
             ]
             
-            if any(phrase.lower() in page_content.lower() for phrase in not_available_phrases):
+            is_unavailable = any(phrase.lower() in page_content.lower() or phrase.lower() in page_text.lower() for phrase in not_available_phrases)
+            
+            if is_unavailable:
                 await browser.close()
                 return False, None, None
 
@@ -111,11 +121,9 @@ async def check_account_status(username):
                 }
             }""")
             
-            # التأكد من وجود وصف حقيقي أو محتوى بروفایل صالح وعدم قبول الوصف الفارغ الذي يخص صفحات تسجيل الدخول
-            desc = profile_info.get("description", "")
-            if not desc or "Log in" in desc or "Instagram" == desc:
-                # محاولة جلب الوصف من عنصر الـ h1 أو العنوان إن وجد
-                profile_info["description"] = f"حساب نشط: @{username}"
+            if not profile_info.get("description") or "isn't available" in profile_info.get("description"):
+                await browser.close()
+                return False, None, None
 
             screenshot_path = f"active_{username}_{int(datetime.now().timestamp())}.png"
             await page.screenshot(path=screenshot_path, full_page=False)
