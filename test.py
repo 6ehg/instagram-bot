@@ -12,6 +12,9 @@ from telegram.ext import (
 )
 from playwright.async_api import async_playwright
 
+# --- ضع رقم الـ ID الخاص بك هنا (بين علامتي التنصيص أو كأرقام) ---
+ADMIN_USER_ID = 6836512592  # استبدل هذا الرقم برقم حسابك الحقيقي في تيليجرام
+
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
@@ -27,8 +30,14 @@ threading.Thread(target=run_web_server, daemon=True).start()
 # ---------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    # التحقق مما إذا كان المستخدم هو أنت أم لا
+    if user_id != ADMIN_USER_ID:
+        await update.message.reply_text("عذراً، هذا البوت خاص ولا يسمح لأحد باستخدامه غير مالكه! 🔒")
+        return
+
     await update.message.reply_text(
-        "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
+        "أهلاً بك يا مالكي في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
         "أرسل الأمر هكذا لمراقبة أي حساب بصمت حتى يفتح:\n"
         "/track username"
     )
@@ -95,8 +104,7 @@ async def check_account_status(username):
                     return { description: "", verified: false };
                 }
             }""")
-            
-            if not profile_info.get("description") or "isn't available" in profile_info.get("description"):
+           if not profile_info.get("description") or "isn't available" in profile_info.get("description"):
                 await browser.close()
                 return False, None, None
 
@@ -140,7 +148,7 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     f"📊 التفاصيل: {desc}\n"
                     f"🏅 حالة التوثيق: {verified_badge}\n"
                     f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 وقت الظهور/فتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
@@ -168,6 +176,11 @@ async def monitor_account_background(chat_id, username, context, initial_message
             await asyncio.sleep(120)
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_USER_ID:
+        await update.message.reply_text("عذراً، هذا الأمر مخصص لمالك البوت فقط! ❌")
+        return
+
     if not context.args:
         await update.message.reply_text("الرجاء كتابة اليوزر بعد الأمر. مثال:\n/track elonmusk")
         return
@@ -180,10 +193,14 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user_id = query.from_user.id
+    if user_id != ADMIN_USER_ID:
+        await query.answer("هذا الزر ليس لك!", show_alert=True)
+        return
+
     await query.answer()
     
-    if query.data.startswith("refresh_"):
-        username = query.data.replace("refresh_", "")
+    if query.data.startswith("refresh_"): username = query.data.replace("refresh_", "")
         chat_id = query.message.chat_id
         status_msg = await query.message.reply_text(f"🔄 جاري الفحص اليدوي لـ @{username}...")
         
@@ -222,4 +239,4 @@ async def main():
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    asyncio.main(main()) if hasattr(asyncio, 'main') else asyncio.run(main())
+    asyncio.run(main())
