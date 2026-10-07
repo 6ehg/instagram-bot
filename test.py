@@ -8,15 +8,27 @@ from telegram.ext import (
     ApplicationBuilder, 
     ContextTypes, 
     CommandHandler, 
-    CallbackQueryHandler
+    CallbackQueryHandler,
+    MessageHandler,
+    filters
 )
 from playwright.async_api import async_playwright
 
-# --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
+# --- الآي دي الأساسي لمالك البوت ---
 ADMIN_USER_ID = 6836512592
 
 # --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
-INSTAGRAM_SESSION_ID = "25398016043%3Al7fxE2PsOujNBC%3A18%3AAYkgwvtgsKzr1Wldp5PMK_ysivvYhvgSb849ahu6hg"
+INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
+
+# --- قوائم إدارة لوحة التحكم ---
+banned_users = set()
+admins = {ADMIN_USER_ID}
+users = {}
+broadcast_list = []
+
+# متغير مؤقت لتتبع الحالة (مثل انتظار إدخال يوزر للحظر أو الإذاعة)
+user_states = {}
+
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
@@ -31,17 +43,46 @@ def run_web_server():
 threading.Thread(target=run_web_server, daemon=True).start()
 # ---------------------------------------------
 
+# --- دوال لوحة التحكم ---
+def get_admin_menu():
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="manage_users")],
+        [InlineKeyboardButton("📊 الإحصائيات", callback_data="statistics")],
+        [InlineKeyboardButton("📢 الإذاعة", callback_data="broadcast")]
+    ])
+    return markup
+
+def get_manage_users_menu():
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚫 حظر مستخدم", callback_data="ban_user")],
+        [InlineKeyboardButton("🔓 فك الحظر", callback_data="unban_user")],
+        [InlineKeyboardButton("➕ إضافة أدمن", callback_data="add_admin")],
+        [InlineKeyboardButton("➖ حذف أدمن", callback_data="remove_admin")],
+        [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="main_menu")]
+    ])
+    return markup
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id != ADMIN_USER_ID:
-        await update.message.reply_text("عذراً، هذا البوت خاص ولا يسمح لأحد باستخدامه غير مالكه! 🔒")
+    username = update.effective_user.username
+    
+    if user_id in banned_users:
+        await update.message.reply_text("أنت محظور من استخدام هذا البوت.")
         return
 
-    await update.message.reply_text(
-        "أهلاً بك يا مالكي في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "أرسل الأمر هكذا لمراقبة أي حساب بصمت حتى يفتح:\n"
-        "/track username"
-    )
+    if user_id not in users:
+        users[user_id] = {"username": username, "joined": datetime.now()}
+        if user_id not in broadcast_list:
+            broadcast_list.append(user_id)
+    
+    if user_id in admins:
+        await update.message.reply_text(
+            "مرحبًا بك في لوحة التحكم وبوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
+            "للمراقبة السريعة، أرسل:\n/track username",
+            reply_markup=get_admin_menu()
+        )
+    else:
+        await update.message.reply_text("عذراً، هذا البوت خاص ولا يسمح لأحد باستخدامه غير مالكه! 🔒")
 
 async def check_account_status(username):
     browser = None
@@ -51,8 +92,6 @@ async def check_account_status(username):
                 headless=True, 
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
-            
-            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
             context = await browser.new_context(viewport={"width": 1440, "height": 900})
             await context.add_cookies([
                 {
@@ -66,7 +105,6 @@ async def check_account_status(username):
             ])
             
             page = await context.new_page()
-            
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
             
@@ -95,12 +133,8 @@ async def check_account_status(username):
             page_text = await page.evaluate("() => document.body.innerText")
             
             not_available_phrases = [
-                "Profile isn't available",
-                "isn't available",
-                "Sorry, this page isn't available",
-                "عذراً، هذه الصفحة غير متوفرة",
-                "The link you followed may be broken",
-                "Page not found"
+                "Profile isn't available", "isn't available", "Sorry, this page isn't available",
+                "عذراً، هذه الصفحة غير متوفرة", "The link you followed may be broken", "Page not found"
             ]
             
             is_unavailable = any(phrase.lower() in page_content.lower() or phrase.lower() in page_text.lower() for phrase in not_available_phrases)
@@ -168,7 +202,6 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
-                
                 keyboard = [[InlineKeyboardButton("🔄 فحص مرة أخرى", callback_data=f"refresh_{username}")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -183,7 +216,6 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 
                 if os.path.exists(screenshot_path):
                     os.remove(screenshot_path)
-                    
                 break
             else:
                 await asyncio.sleep(120)
@@ -193,8 +225,8 @@ async def monitor_account_background(chat_id, username, context, initial_message
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id != ADMIN_USER_ID:
-        await update.message.reply_text("عذراً، هذا الأمر مخصص لمالك البوت فقط! ❌")
+    if user_id not in admins:
+        await update.message.reply_text("عذراً، هذا الأمر مخصص للأدمنية فقط! ❌")
         return
 
     if not context.args:
@@ -207,17 +239,52 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
     asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
 
+# --- معالج الأزرار المحدث للوحة التحكم ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    if user_id != ADMIN_USER_ID:
+    if user_id not in admins:
         await query.answer("هذا الزر ليس لك!", show_alert=True)
         return
 
     await query.answer()
+    data = query.data
     
-    if query.data.startswith("refresh_"):
-        username = query.data.replace("refresh_", "")
+    if data == "manage_users":
+        await query.message.edit_text("إدارة المستخدمين:", reply_markup=get_manage_users_menu())
+    
+    elif data == "main_menu":
+        await query.message.edit_text("مرحبًا بك في لوحة التحكم:", reply_markup=get_admin_menu())
+        
+    elif data == "ban_user":
+        user_states[user_id] = "waiting_ban"
+        await query.message.reply_text("أرسل معرف المستخدم (آي دي) أو اليوزر المراد حضره:")
+    
+    elif data == "unban_user":
+        user_states[user_id] = "waiting_unban"
+        await query.message.reply_text("أرسل معرف المستخدم لفك الحظر عنه:")
+    
+    elif data == "add_admin":
+        user_states[user_id] = "waiting_add_admin"
+        await query.message.reply_text("أرسل معرف المستخدم لإضافته كأدمن:")
+    
+    elif data == "remove_admin":
+        user_states[user_id] = "waiting_remove_admin"
+        await query.message.reply_text("أرسل معرف المستخدم لحذفه من الأدمن:")
+
+    elif data == "statistics":
+        total_users = len(users)
+        last_users = list(users.keys())[-10:]
+        last_users_str = "\n".join([f"@{users[u]['username']}" if users[u]['username'] else str(u) for u in last_users])
+        stats = f"📊 Total Users: {total_users}\nLast 10 Users:\n{last_users_str}"
+        await query.message.reply_text(stats)
+    
+    elif data == "broadcast":
+        user_states[user_id] = "waiting_broadcast"
+        await query.message.reply_text("أرسل الرسالة التي تريد إرسالها لجميع المستخدمين:")
+
+    elif data.startswith("refresh_"):
+        username = data.replace("refresh_", "")
         chat_id = query.message.chat_id
         status_msg = await query.message.reply_text(f"🔄 جاري الفحص اليدوي لـ @{username}...")
         
@@ -233,11 +300,72 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
         await status_msg.delete()
 
+# --- معالج الرسائل النصية لتنفيذ أوامر لوحة التحكم (الحظر، الأدمن، الإذاعة) ---
+async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in admins:
+        return
+
+    state = user_states.get(user_id)
+    if not state:
+        return
+
+    text = update.message.text.strip()
+    
+    if state == "waiting_ban":
+        try:
+            target_id = int(text)
+            banned_users.add(target_id)
+            await update.message.reply_text(f"🚫 تم حظر المستخدم: {target_id}")
+        except ValueError:
+            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+            
+    elif state == "waiting_unban":
+        try:
+            target_id = int(text)
+            banned_users.discard(target_id)
+            await update.message.reply_text(f"🔓 تم فك الحظر عن المستخدم: {target_id}")
+        except ValueError:
+            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+            
+    elif state == "waiting_add_admin":
+        try:
+            target_id = int(text)
+            admins.add(target_id)
+            await update.message.reply_text(f"➕ تمت إضافة الأدمن بنجاح: {target_id}")
+        except ValueError:
+            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+            
+    elif state == "waiting_remove_admin":
+        try:
+            target_id = int(text)
+            if target_id == ADMIN_USER_ID:
+                await update.message.reply_text("لا يمكنك حذف المالك الأساسي!")
+            else:
+                admins.discard(target_id)
+                await update.message.reply_text(f"➖ تم حذف الأدمن: {target_id}")
+        except ValueError:
+            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+            
+    elif state == "waiting_broadcast":
+        success_count = 0
+        for uid in broadcast_list:
+            try:
+                await context.bot.send_message(uid, text)
+                success_count += 1
+            except:
+                pass
+        await update.message.reply_text(f"📢 تم إرسال الإذاعة بنجاح إلى {success_count} مستخدم.")
+
+    # مسح الحالة بعد إتمام العملية
+    user_states.pop(user_id, None)
+
 async def run_bot(token):
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
     
     await app.initialize()
     await app.start()
