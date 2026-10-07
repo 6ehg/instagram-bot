@@ -17,7 +17,10 @@ from playwright.async_api import async_playwright
 # --- الآي دي الأساسي لمالك البوت ---
 ADMIN_USER_ID = 6836512592
 
-# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ _ _
+# --- التوكن المحدد للبوت ---
+BOT_TOKEN = "8544914218:AAHN0mmy3q5dPqWQFlkb36wJ3bX6TM8DHrc"
+
+# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
 INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
 
 # --- قوائم إدارة لوحة التحكم ---
@@ -33,7 +36,7 @@ web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "Bots are running and active!"
+    return "Bot is running and active!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
@@ -116,7 +119,8 @@ async def check_account_status(username):
             await page.wait_for_timeout(3000)
             
             try:
-                await page.evaluate("""() => {querySelectorAll("div[role='dialog']");
+                await page.evaluate("""() => {
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
                     dialogs.forEach(el => el.style.display = 'none');
                     const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
                     backdrops.forEach(el => el.style.display = 'none');
@@ -193,15 +197,16 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 caption = (
                     f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 اليوزر: @{username}\n"
-                    f"🔗 الرابط: https://instagram.com/{username}\n"
-                    f"📊 التفاصيل: {desc}\n"
-                    f"🏅 حالة التوثيق: {verified_badge}\n"
-                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
+                    f"👤 **اليوزر:** @{username}\n"
+                    f"🔗 **الرابط:** https://instagram.com/{username}\n"
+                    f"📊 **التفاصيل:** {desc}\n"
+                    f"🏅 **حالة التوثيق:** {verified_badge}\n"
+                    f"🕒 **بدء المراقبة:** {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 **وقت الظهور/الفتح:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"⏱ **مدة المراقبة:** {hours} hours {minutes} minutes\n\n"
                     f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
                 )
+                
                 keyboard = [[InlineKeyboardButton("🔄 فحص مرة أخرى", callback_data=f"refresh_{username}")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -327,7 +332,7 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
             banned_users.add(target_id)
             await update.message.reply_text(f"🚫 تم حظر المستخدم بنجاح: {target_id}")
         else:
-            await update.message.reply_text("❌ لم يتم العثور على المستخدم! تأكد أنه أرسل /start للبوت سابقاً، أو أرسل الـ ID الرقمي مباشرة.")
+            await update.message.reply_text("❌ لم يتم العثور على المستخدم! تأكد أنه أرسل `/start` للبوت سابقاً، أو أرسل الـ ID الرقمي مباشرة.")
             
     elif state == "waiting_unban":
         target_id = resolve_target_id(text)
@@ -368,25 +373,17 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
 
     user_states.pop(user_id, None)
 
-async def run_bot(token):
-    app = ApplicationBuilder().token(token).build()
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
     
-    # تم تعديل طريقة تشغيل الـ Polling هنا لتصبح مستقرة ولا تنطفئ
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
-    print(f"تم تشغيل البوت بنجاح برمز التوكن: {token[:10]}...")
-
-async def main():
-    tokens = [
-        "8544914218:AAHN0mmy3q5dPqWQFlkb36wJ3bX6TM8DHrc"
-    ]
-    
-    await asyncio.gather(*(run_bot(token) for token in tokens))
+    print(f"تم تشغيل البوت الأساسي بنجاح على التوكن المحدد!")
     
     while True:
         await asyncio.sleep(3600)
