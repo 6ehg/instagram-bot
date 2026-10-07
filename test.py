@@ -17,7 +17,7 @@ from playwright.async_api import async_playwright
 # --- الآي دي الأساسي لمالك البوت ---
 ADMIN_USER_ID = 6836512592
 
-# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ ---
+# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ _ _
 INSTAGRAM_SESSION_ID = "29263544035%3A6QmJFFM4KBu8DG%3A11%3AAYljKBPj0DrJnYSALDXcEt3uw7WN30A-Gre-bidQdg"
 
 # --- قوائم إدارة لوحة التحكم ---
@@ -25,8 +25,7 @@ banned_users = set()
 admins = {ADMIN_USER_ID}
 users = {}
 broadcast_list = []
-
-# متغير مؤقت لتتبع الحالة (مثل انتظار إدخال يوزر للحظر أو الإذاعة)
+username_to_id = {}
 user_states = {}
 
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
@@ -43,7 +42,6 @@ def run_web_server():
 threading.Thread(target=run_web_server, daemon=True).start()
 # ---------------------------------------------
 
-# --- دوال لوحة التحكم ---
 def get_admin_menu():
     markup = InlineKeyboardMarkup([
         [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="manage_users")],
@@ -74,6 +72,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users[user_id] = {"username": username, "joined": datetime.now()}
         if user_id not in broadcast_list:
             broadcast_list.append(user_id)
+            
+    if username:
+        username_to_id[username.lower()] = user_id
     
     if user_id in admins:
         await update.message.reply_text(
@@ -115,8 +116,7 @@ async def check_account_status(username):
             await page.wait_for_timeout(3000)
             
             try:
-                await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                await page.evaluate("""() => {querySelectorAll("div[role='dialog']");
                     dialogs.forEach(el => el.style.display = 'none');
                     const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
                     backdrops.forEach(el => el.style.display = 'none');
@@ -239,7 +239,6 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
     asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
 
-# --- معالج الأزرار المحدث للوحة التحكم ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -258,19 +257,19 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "ban_user":
         user_states[user_id] = "waiting_ban"
-        await query.message.reply_text("أرسل معرف المستخدم (آي دي) أو اليوزر المراد حضره:")
+        await query.message.reply_text("أرسل معرف المستخدم (آي دي) أو يوزره (مثال: @username):")
     
     elif data == "unban_user":
         user_states[user_id] = "waiting_unban"
-        await query.message.reply_text("أرسل معرف المستخدم لفك الحظر عنه:")
+        await query.message.reply_text("أرسل معرف المستخدم أو يوزره لفك الحظر عنه:")
     
     elif data == "add_admin":
         user_states[user_id] = "waiting_add_admin"
-        await query.message.reply_text("أرسل معرف المستخدم لإضافته كأدمن:")
+        await query.message.reply_text("أرسل معرف المستخدم أو يوزره لإضافته كأدمن:")
     
     elif data == "remove_admin":
         user_states[user_id] = "waiting_remove_admin"
-        await query.message.reply_text("أرسل معرف المستخدم لحذفه من الأدمن:")
+        await query.message.reply_text("أرسل معرف المستخدم أو يوزره لحذفه من الأدمن:")
 
     elif data == "statistics":
         total_users = len(users)
@@ -300,7 +299,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
         await status_msg.delete()
 
-# --- معالج الرسائل النصية لتنفيذ أوامر لوحة التحكم (الحظر، الأدمن، الإذاعة) ---
+def resolve_target_id(text):
+    text = text.strip()
+    if text.isdigit():
+        return int(text)
+    
+    clean_username = text.replace("@", "").lower()
+    if clean_username in username_to_id:
+        return username_to_id[clean_username]
+    
+    return None
+
 async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in admins:
@@ -313,39 +322,39 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     text = update.message.text.strip()
     
     if state == "waiting_ban":
-        try:
-            target_id = int(text)
+        target_id = resolve_target_id(text)
+        if target_id:
             banned_users.add(target_id)
-            await update.message.reply_text(f"🚫 تم حظر المستخدم: {target_id}")
-        except ValueError:
-            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+            await update.message.reply_text(f"🚫 تم حظر المستخدم بنجاح: {target_id}")
+        else:
+            await update.message.reply_text("❌ لم يتم العثور على المستخدم! تأكد أنه أرسل /start للبوت سابقاً، أو أرسل الـ ID الرقمي مباشرة.")
             
     elif state == "waiting_unban":
-        try:
-            target_id = int(text)
+        target_id = resolve_target_id(text)
+        if target_id:
             banned_users.discard(target_id)
             await update.message.reply_text(f"🔓 تم فك الحظر عن المستخدم: {target_id}")
-        except ValueError:
-            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+        else:
+            await update.message.reply_text("❌ لم يتم العثور على المستخدم بهذا المعرف.")
             
     elif state == "waiting_add_admin":
-        try:
-            target_id = int(text)
+        target_id = resolve_target_id(text)
+        if target_id:
             admins.add(target_id)
             await update.message.reply_text(f"➕ تمت إضافة الأدمن بنجاح: {target_id}")
-        except ValueError:
-            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+        else:
+            await update.message.reply_text("❌ لم يتم العثور على المستخدم! تأكد أنه تفاعل مع البوت أولاً لكي يستطيع حفظ معرفه.")
             
     elif state == "waiting_remove_admin":
-        try:
-            target_id = int(text)
+        target_id = resolve_target_id(text)
+        if target_id:
             if target_id == ADMIN_USER_ID:
                 await update.message.reply_text("لا يمكنك حذف المالك الأساسي!")
             else:
                 admins.discard(target_id)
                 await update.message.reply_text(f"➖ تم حذف الأدمن: {target_id}")
-        except ValueError:
-            await update.message.reply_text("الرجاء إدخال رقم الآي دي صحيحاً.")
+        else:
+            await update.message.reply_text("❌ لم يتم العثور على هذا الأدمن.")
             
     elif state == "waiting_broadcast":
         success_count = 0
@@ -357,7 +366,6 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                 pass
         await update.message.reply_text(f"📢 تم إرسال الإذاعة بنجاح إلى {success_count} مستخدم.")
 
-    # مسح الحالة بعد إتمام العملية
     user_states.pop(user_id, None)
 
 async def run_bot(token):
@@ -367,6 +375,7 @@ async def run_bot(token):
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
     
+    # تم تعديل طريقة تشغيل الـ Polling هنا لتصبح مستقرة ولا تنطفئ
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
@@ -374,7 +383,8 @@ async def run_bot(token):
 
 async def main():
     tokens = [
-        "8544914218:AAHN0mmy3q5dPqWQFlkb36wJ3bX6TM8DHrc"
+        "8487717218:AAHEOFV-KJz8HJORsl4JvSWPBWxVFM3sqEg",
+        "8875867251:AAHEH5njF9zHBk_slXVo54ngOxg4dBoqY8U"
     ]
     
     await asyncio.gather(*(run_bot(token) for token in tokens))
@@ -384,3 +394,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+                    const dialogs = document.
