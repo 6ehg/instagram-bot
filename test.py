@@ -393,5 +393,4 @@ async def main():
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    asyncio.run(main())
-                    const dialogs = document.
+    asyncio.run(main()) const dialogs = document.
