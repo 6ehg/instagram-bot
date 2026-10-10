@@ -66,7 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = (
         "أهلاً بك في بوت مراقبة حظر وتبنيد إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "للبدء بمراقبة حساب (لمعرفة متى يُحظر أو يُفك عنه البند):\n"
+        "للبدء بمراقبة حساب (سيخبرك فوراً إذا كان موجوداً ويراقب التبنيد):\n"
         "👉 /track username\n\n"
     )
     if user_id == MASTER_ADMIN_ID:
@@ -233,29 +233,50 @@ async def check_account_status(username):
                 pass
         return False, None, None
 
-# --- مراقبة الحساب في الخلفية (التبنيد والفتح فقط) ---
+# --- مراقبة الحساب في الخلفية ---
 
 async def monitor_account_background(chat_id, username, context, initial_message):
-    start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأخبرك فوراً إذا تعرض للحظر/التبنيد أو تم فك البند عنه!")
+    # الفحص الأول الفوري لإرسال النتيجة للمستخدم
+    is_active, info, screenshot_path = await check_account_status(username)
     
-    # تحديد الحالة الأولية
-    is_initially_active, _, _ = await check_account_status(username)
-    account_history[username] = "ACTIVE" if is_initially_active else "BANNED"
+    if is_active:
+        desc = info.get("description", "لا توجد تفاصيل")
+        verified_badge = "✅ نعم (موثق)" if info.get("verified") else "❌ لا (غير موثق)"
+        
+        caption = (
+            f"👤 **الحساب موجود وشغال حالياً!**\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🔗 اليوزر: @{username}\n"
+            f"📊 التفاصيل: {desc}\n"
+            f"🏅 التوثيق: {verified_badge}\n"
+            f"🟢 البوت بدأ المراقبة المستمرة للتبنيد..."
+        )
+        
+        with open(screenshot_path, "rb") as photo:
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=caption,
+                parse_mode="Markdown"
+            )
+        if os.path.exists(screenshot_path):
+            os.remove(screenshot_path)
+            
+        await initial_message.delete()
+        account_history[username] = "ACTIVE"
+    else:
+        await initial_message.edit_text(f"❌ الحساب @{username} غير متوفر حالياً (يبدو أنه مبند أو مقفل مسبقاً). سأتابع مراقبته حتى يفتح.")
+        account_history[username] = "BANNED"
 
+    # حلقة المراقبة المستمرة في الخلفية
     while True:
         try:
+            await asyncio.sleep(random.randint(180, 300))
             is_active, info, screenshot_path = await check_account_status(username)
             current_status = account_history.get(username, "ACTIVE")
 
-            # الحالة 1: الحساب كان مبنداً وأصبح شغالاً (فك البند)
+            # الحالة 1: فك البند
             if is_active and current_status == "BANNED":
-                end_time = datetime.now()
-                duration = end_time - start_time
-                total_seconds = int(duration.total_seconds())
-                hours = total_seconds // 3600
-                minutes = (total_seconds % 3600) // 60
-                
                 desc = info.get("description", "لا توجد تفاصيل")
                 verified_badge = "✅ نعم (موثق)" if info.get("verified") else "❌ لا (غير موثق)"
                 
@@ -263,30 +284,19 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     f"🎉 **تم فك البند عن الحساب وأصبح موجوداً!**\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"👤 اليوزر: @{username}\n"
-                    f"🔗 الرابط: https://instagram.com/{username}\n"
                     f"📊 التفاصيل: {desc}\n"
-                    f"🏅 حالة التوثيق: {verified_badge}\n"
-                    f"🕒 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"🏅 التوثيق: {verified_badge}\n"
+                    f"🕒 وقت الفتح: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
                 
-                keyboard = [[InlineKeyboardButton("🔄 فحص مرة أخرى", callback_data=f"refresh_{username}")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-
                 with open(screenshot_path, "rb") as photo:
-                    await context.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=photo,
-                        caption=caption,
-                        parse_mode="Markdown",
-                        reply_markup=reply_markup
-                    )
-                
+                    await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption, parse_mode="Markdown")
                 if os.path.exists(screenshot_path):
                     os.remove(screenshot_path)
                 
                 account_history[username] = "ACTIVE"
 
-            # الحالة 2: الحساب كان شغالاً وتم تبنيده أو إغلاقه
+            # الحالة 2: حدث تبنيد جديد
             elif not is_active and current_status == "ACTIVE":
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -294,10 +304,6 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     parse_mode="Markdown"
                 )
                 account_history[username] = "BANNED"
-
-            # فترة انتظار عشوائية آمنة بين الفحوصات (لتفادي الحظر)
-            sleep_time = random.randint(180, 300)
-            await asyncio.sleep(sleep_time)
                 
         except asyncio.CancelledError:
             break
@@ -318,7 +324,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة التبنيد للحساب @{username}...")
+    status_message = await update.message.reply_text(f"🔍 جاري فحص الحساب @{username} وإعداده للمراقبة...")
     task = asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
     active_tasks[username] = task
 
@@ -331,23 +337,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await query.answer()
-    
-    if query.data.startswith("refresh_"):
-        username = query.data.replace("refresh_", "")
-        chat_id = query.message.chat_id
-        status_msg = await query.message.reply_text(f"🔄 جاري الفحص اليدوي لـ @{username}...")
-        
-        is_active, info, screenshot_path = await check_account_status(username)
-        if is_active:
-            desc = info.get("description", "لا توجد تفاصيل")
-            caption = f"👤 حساب @{username} شغال حالياً!\n📊 التفاصيل: {desc}"
-            with open(screenshot_path, "rb") as photo:
-                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption)
-            if os.path.exists(screenshot_path):
-                os.remove(screenshot_path)
-        else:
-            await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
-        await status_msg.delete()
 
 def main():
     token = "8929977949:AAGNBKP_PuNMQe4FC6ps5dpCDZ8PDp8bMNU"
@@ -361,7 +350,7 @@ def main():
     app.add_handler(CommandHandler("userslist", users_list))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    print("تم تشغيل بوت مراقبة التبنيد بنجاح (نسخة صافية وثابتة)...")
+    print("تم تشغيل البوت بنجاح...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
