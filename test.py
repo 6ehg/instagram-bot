@@ -16,10 +16,8 @@ from playwright.async_api import async_playwright
 
 # --- الآي دي الخاص بك فقط كمالك رئيسي للبوت ---
 MASTER_ADMIN_ID = 6836512592 
-
 USERS_FILE = "allowed_users.json"
 
-# قاموس لتخزين المهام النشطة
 active_tasks = {}
 
 def load_users():
@@ -31,7 +29,6 @@ def load_users():
                     return data
         except Exception:
             pass
-    # الآي دي الخاص بك فقط كافتراضي
     default_users = [MASTER_ADMIN_ID]
     save_users(default_users)
     return default_users
@@ -42,9 +39,6 @@ def save_users(users_list):
             json.dump(users_list, f)
     except Exception as e:
         print(f"Error saving users: {e}")
-
-# --- الـ sessionid الخاص بحسابك الوهمي ---
-INSTAGRAM_SESSION_ID = "29263544035%3A0QUHPGBO5GYkyZ%3A21%3AAYlR-Uys4WBY2g-mbfDCExjueB92HgSzHGtK0Qd53g"
 
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
@@ -68,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = (
-        "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
+        "أهلاً بك في بوت مراقبة إنستغرام الذكي (بدون حظر)! 🕵️‍♂️✨\n\n"
         "أمر المراقبة:\n/track username\n\n"
     )
     if user_id == MASTER_ADMIN_ID:
@@ -150,26 +144,16 @@ async def check_account_status(username):
             )
             
             user_agents = [
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
-                "Mozilla/5.0 (X11; Linux x86_64; Gecko/20100101 Firefox/121.0)"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15",
+                "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0"
             ]
             
+            # تصفح غريب (Guest Mode) بدون أي تسجيل دخول أو كوكيز
             context = await browser.new_context(
                 viewport={"width": 1440, "height": 900},
                 user_agent=random.choice(user_agents)
             )
-            
-            await context.add_cookies([
-                {
-                    "name": "sessionid",
-                    "value": INSTAGRAM_SESSION_ID,
-                    "domain": ".instagram.com",
-                    "path": "/",
-                    "httpOnly": True,
-                    "secure": True
-                }
-            ])
             
             page = await context.new_page()
             url = f"https://www.instagram.com/{username}/"
@@ -179,22 +163,7 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(4000)
-            
-            try:
-                await page.evaluate("""() => {
-                    const dialogs = document.querySelectorAll("div[role='dialog']");
-                    dialogs.forEach(el => el.style.display = 'none');
-                    const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
-                    backdrops.forEach(el => el.style.display = 'none');
-                    document.body.style.overflow = 'auto';
-                    document.documentElement.style.overflow = 'auto';
-                }""")
-            except Exception:
-                pass
-            
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(3000)
             
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
@@ -245,7 +214,7 @@ async def check_account_status(username):
 
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب وسأرسل لك التقرير فوراً!")
+    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت (بدون سيشن وبأمان تام)...\nسأنتظر حتى يفتح الحساب وسأرسل لك التقرير فوراً!")
     
     while True:
         try:
@@ -290,6 +259,7 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     
                 break
             else:
+                # فحص آمن ومريح كل 3 إلى 5 دقائق
                 sleep_time = random.randint(180, 300)
                 await asyncio.sleep(sleep_time)
                 
@@ -355,7 +325,7 @@ def main():
     app.add_handler(CommandHandler("userslist", users_list))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    print("تم تشغيل البوت بنجاح...")
+    print("تم تشغيل البوت بنجاح (بدون سيشن - حماية كاملة)...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
