@@ -19,6 +19,9 @@ MASTER_ADMIN_ID = 6836512592
 
 USERS_FILE = "allowed_users.json"
 
+# قاموس لتخزين المهام النشطة للتحكم بها
+active_tasks = {}
+
 def load_users():
     if os.path.exists(USERS_FILE):
         try:
@@ -26,15 +29,18 @@ def load_users():
                 data = json.load(f)
                 if isinstance(data, list):
                     return data
-        except:
+        except Exception:
             pass
     default_users = 6836512592
     save_users(default_users)
     return default_users
 
 def save_users(users_list):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users_list, f)
+    try:
+        with open(USERS_FILE, "w") as f:
+            json.dump(users_list, f)
+    except Exception as e:
+        print(f"Error saving users: {e}")
 
 # --- الـ sessionid الخاص بحسابك الوهمي ---
 INSTAGRAM_SESSION_ID = "29263544035%3A0QUHPGBO5GYkyZ%3A21%3AAYlR-Uys4WBY2g-mbfDCExjueB92HgSzHGtK0Qd53g"
@@ -232,7 +238,7 @@ async def check_account_status(username):
         if browser:
             try:
                 await browser.close()
-            except:
+            except Exception:
                 pass
         return False, None, None
 
@@ -283,11 +289,12 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     
                 break
             else:
-                # الفحص المتوازن الآمن (بين 3 إلى 5 دقائق: 180 إلى 300 ثانية)
                 sleep_time = random.randint(180, 300)
                 await asyncio.sleep(sleep_time)
                 
-        except Exception as e:
+        except asyncio.CancelledError:
+            break
+        except Exception:
             await asyncio.sleep(180)
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -305,7 +312,8 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
     status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
-    asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
+    task = asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
+    active_tasks[username] = task
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -334,8 +342,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ الحساب @{username} ما زال غير موجود أو مقفلاً.")
         await status_msg.delete()
 
-async def run_bot(token):
+def main():
+    token = "8929977949:AAGNBKP_PuNMQe4FC6ps5dpCDZ8PDp8bMNU"
+    
     app = ApplicationBuilder().token(token).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
     app.add_handler(CommandHandler("adduser", add_user))
@@ -343,20 +354,8 @@ async def run_bot(token):
     app.add_handler(CommandHandler("userslist", users_list))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling(drop_pending_updates=True)
-    print(f"تم تشغيل البوت بنجاح بررمز التوكن: {token[:10]}...")
-
-async def main():
-    tokens = [
-        "8929977949:AAGNBKP_PuNMQe4FC6ps5dpCDZ8PDp8bMNU"
-    ]
-    
-    await asyncio.gather(*(run_bot(token) for token in tokens))
-    
-    while True:
-        await asyncio.sleep(3600)
+    print("تم تشغيل البوت بنجاح...")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
