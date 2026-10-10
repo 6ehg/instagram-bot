@@ -1,5 +1,7 @@
 import asyncio
+import json
 import os
+import random
 import threading
 from datetime import datetime
 from flask import Flask
@@ -12,11 +14,31 @@ from telegram.ext import (
 )
 from playwright.async_api import async_playwright
 
-# --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
-ADMIN_USER_ID =[6836512592, 7546855100]
+# --- المالك الأساسي للبوت (لا يمكن حذفه) ---
+MASTER_ADMIN_ID = 6836512592 
 
-# --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ _ _
+USERS_FILE = "allowed_users.json"
+
+def load_users():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except:
+            pass
+    default_users = 6836512592
+    save_users(default_users)
+    return default_users
+
+def save_users(users_list):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users_list, f)
+
+# --- الـ sessionid الخاص بحسابك الوهمي ---
 INSTAGRAM_SESSION_ID = "29263544035%3A0QUHPGBO5GYkyZ%3A21%3AAYlR-Uys4WBY2g-mbfDCExjueB92HgSzHGtK0Qd53g"
+
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
@@ -29,19 +51,87 @@ def run_web_server():
     web_app.run(host="0.0.0.0", port=port)
 
 threading.Thread(target=run_web_server, daemon=True).start()
-# ---------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id != ADMIN_USER_ID:
-        await update.message.reply_text("عذراً، هذا البوت خاص ولا يسمح لأحد باستخدامه غير مالكه! 🔒")
+    allowed_users = load_users()
+    
+    if user_id not in allowed_users:
+        await update.message.reply_text("عذراً، هذا البوت خاص ولا يسمح لك باستخدامه! 🔒")
         return
 
-    await update.message.reply_text(
-        "أهلاً بك يا مالكي في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
-        "أرسل الأمر هكذا لمراقبة أي حساب بصمت حتى يفتح:\n"
-        "/track username"
+    msg = (
+        "أهلاً بك في بوت مراقبة إنستغرام الذكي! 🕵️‍♂️✨\n\n"
+        "أمر المراقبة:\n/track username\n\n"
     )
+    if user_id == MASTER_ADMIN_ID:
+        msg += (
+            "أوامر الإدارة (خاصة بك):\n"
+            "➕ /adduser [ID] - لإضافة مستخدم جديد\n"
+            "➖ /removeuser [ID] - لحذف مستخدم\n"
+            "📋 /userslist - لعرض المستخدمين المصرح لهم"
+        )
+    await update.message.reply_text(msg)
+
+async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != MASTER_ADMIN_ID:
+        await update.message.reply_text("هذا الأمر مخصص لمالك البوت الرئيسي فقط! ❌")
+        return
+
+    if not context.args:
+        await update.message.reply_text("الرجاء كتابة الآي دي المراد إضافته. مثال:\n/adduser 123456789")
+        return
+
+    try:
+        new_user_id = int(context.args[0])
+        allowed_users = load_users()
+        if new_user_id in allowed_users:
+            await update.message.reply_text("هذا المستخدم مضاف مسبقاً بالفعل! ⚠️")
+            return
+        
+        allowed_users.append(new_user_id)
+        save_users(allowed_users)
+        await update.message.reply_text(f"✅ تم إضافة المستخدم بنجاح برقم: `{new_user_id}`", parse_mode="Markdown")
+    except ValueError:
+        await update.message.reply_text("الآي دي يجب أن يكون أرقاماً صحيحة فقط! ❌")
+
+async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != MASTER_ADMIN_ID:
+        await update.message.reply_text("هذا الأمر مخصص لمالك البوت الرئيسي فقط! ❌")
+        return
+
+    if not context.args:
+        await update.message.reply_text("الرجاء كتابة الآي دي المراد حذفه. مثال:\n/removeuser 123456789")
+        return
+
+    try:
+        target_id = int(context.args[0])
+        if target_id == MASTER_ADMIN_ID:
+            await update.message.reply_text("لا يمكنك حذف المالك الأساسي للبوت! 🛑")
+            return
+            
+        allowed_users = load_users()
+        if target_id not in allowed_users:
+            await update.message.reply_text("هذا المستخدم غير موجود في قائمة المصرح لهم! 🔍")
+            return
+            
+        allowed_users.remove(target_id)
+        save_users(allowed_users)
+        await update.message.reply_text(f"🗑 تم حذف المستخدم `{target_id}` بنجاح من البوت.", parse_mode="Markdown")
+    except ValueError:
+        await update.message.reply_text("الآي دي يجب أن يكون أرقاماً صحيحة فقط! ❌")
+
+async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != MASTER_ADMIN_ID:
+        await update.message.reply_text("هذا الأمر مخصص لمالك البوت الرئيسي فقط! ❌")
+        return
+
+    allowed_users = load_users()
+    users_str = "\n".join([f"- `{uid}`" for uid in allowed_users])
+    await update.message.reply_text(f"👥 **قائمة المستخدمين المسموح لهم:**\n{users_str}", parse_mode="Markdown")
 
 async def check_account_status(username):
     browser = None
@@ -52,8 +142,17 @@ async def check_account_status(username):
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
             )
             
-            # إنشاء سياق متصفح جديد وحقن كوكيز الجلسة لتجاوز قيود انستغرام وقراءة كل الحسابات بدقة
-            context = await browser.new_context(viewport={"width": 1440, "height": 900})
+            user_agents = [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
+                "Mozilla/5.0 (X11; Linux x86_64; Gecko/20100101 Firefox/121.0)"
+            ]
+            
+            context = await browser.new_context(
+                viewport={"width": 1440, "height": 900},
+                user_agent=random.choice(user_agents)
+            )
+            
             await context.add_cookies([
                 {
                     "name": "sessionid",
@@ -66,7 +165,6 @@ async def check_account_status(username):
             ])
             
             page = await context.new_page()
-            
             url = f"https://www.instagram.com/{username}/"
             response = await page.goto(url, timeout=60000)
             
@@ -74,7 +172,7 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(4000)
             
             try:
                 await page.evaluate("""() => {
@@ -140,7 +238,7 @@ async def check_account_status(username):
 
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب حقيقة وسأرسل لك التقرير فوراً عند عودته!")
+    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب وسأرسل لك التقرير فوراً!")
     
     while True:
         try:
@@ -165,8 +263,7 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     f"🏅 حالة التوثيق: {verified_badge}\n"
                     f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes\n\n"
-                    f"💡 هذا الحساب أصبح نشطاً وشغالاً الآن على إنستغرام."
+                    f"⏱ مدة المراقبة: {hours} hours {minutes} minutes"
                 )
                 
                 keyboard = [[InlineKeyboardButton("🔄 فحص مرة أخرى", callback_data=f"refresh_{username}")]]
@@ -186,15 +283,18 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     
                 break
             else:
-                await asyncio.sleep(120)
+                # الفحص المتوازن الآمن (بين 3 إلى 5 دقائق: 180 إلى 300 ثانية)
+                sleep_time = random.randint(180, 300)
+                await asyncio.sleep(sleep_time)
                 
         except Exception as e:
-            await asyncio.sleep(120)
+            await asyncio.sleep(180)
 
 async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id != ADMIN_USER_ID:
-        await update.message.reply_text("عذراً، هذا الأمر مخصص لمالك البوت فقط! ❌")
+    allowed_users = load_users()
+    if user_id not in allowed_users:
+        await update.message.reply_text("عذراً، هذا الأمر مخصص للمصرح لهم فقط! ❌")
         return
 
     if not context.args:
@@ -210,7 +310,8 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    if user_id != ADMIN_USER_ID:
+    allowed_users = load_users()
+    if user_id not in allowed_users:
         await query.answer("هذا الزر ليس لك!", show_alert=True)
         return
 
@@ -237,12 +338,15 @@ async def run_bot(token):
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("track", track_user))
+    app.add_handler(CommandHandler("adduser", add_user))
+    app.add_handler(CommandHandler("removeuser", remove_user))
+    app.add_handler(CommandHandler("userslist", users_list))
     app.add_handler(CallbackQueryHandler(button_handler))
     
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
-    print(f"تم تشغيل البوت بنجاح برمز التوكن: {token[:10]}...")
+    print(f"تم تشغيل البوت بنجاح بررمز التوكن: {token[:10]}...")
 
 async def main():
     tokens = [
