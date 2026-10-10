@@ -62,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = (
-        "أهلاً بك في بوت مراقبة إنستغرام الذكي (بدون حظر)! 🕵️‍♂️✨\n\n"
+        "أهلاً بك في بوت مراقبة إنستغرام الذكي (بدون حظر وبصور نظيفة)! 🕵️‍♂️✨\n\n"
         "أمر المراقبة:\n/track username\n\n"
     )
     if user_id == MASTER_ADMIN_ID:
@@ -149,7 +149,6 @@ async def check_account_status(username):
                 "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0"
             ]
             
-            # تصفح غريب (Guest Mode) بدون أي تسجيل دخول أو كوكيز
             context = await browser.new_context(
                 viewport={"width": 1440, "height": 900},
                 user_agent=random.choice(user_agents)
@@ -163,7 +162,24 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(4000)
+            
+            # --- إخفاء النوافذ المنبثقة لتكون لقطة الشاشة نظيفة ---
+            try:
+                await page.evaluate("""() => {
+                    const dialogs = document.querySelectorAll("div[role='dialog']");
+                    dialogs.forEach(el => el.style.display = 'none');
+                    const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
+                    backdrops.forEach(el => el.style.display = 'none');
+                    document.body.style.overflow = 'auto';
+                    document.documentElement.style.overflow = 'auto';
+                }""")
+            except Exception:
+                pass
+            
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(1000)
+            # ---------------------------------------------------
             
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
@@ -214,7 +230,7 @@ async def check_account_status(username):
 
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
-    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت (بدون سيشن وبأمان تام)...\nسأنتظر حتى يفتح الحساب وسأرسل لك التقرير فوراً!")
+    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت (مع تنظيف لقطة الشاشة)...\nسأنتظر حتى يفتح الحساب وسأرسل لك التقرير فوراً!")
     
     while True:
         try:
@@ -259,7 +275,6 @@ async def monitor_account_background(chat_id, username, context, initial_message
                     
                 break
             else:
-                # فحص آمن ومريح كل 3 إلى 5 دقائق
                 sleep_time = random.randint(180, 300)
                 await asyncio.sleep(sleep_time)
                 
@@ -325,7 +340,7 @@ def main():
     app.add_handler(CommandHandler("userslist", users_list))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    print("تم تشغيل البوت بنجاح (بدون سيشن - حماية كاملة)...")
+    print("تم تشغيل البوت بنجاح (مع تنظيف الصور وحماية تامة)...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
