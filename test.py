@@ -16,7 +16,7 @@ from playwright.async_api import async_playwright
 ADMIN_USER_ID = 6836512592
 
 # --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ _ _
-INSTAGRAM_SESSION_ID = "74122480028%3AANAYh1gRQPzu1F%3A5%3AAYnQXFNiER0-TVibm4HR81vyz508NJVEalg_V4OYKw"
+INSTAGRAM_SESSION_ID = "67453950808%3AlUG5TrEtFVNlAb%3A19%3AAYmeEMs8m26lXyjNWyvj_wVEem8gu4dQzid5hO12eg"
 # --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
