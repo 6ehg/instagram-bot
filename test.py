@@ -14,12 +14,11 @@ from telegram.ext import (
 )
 from playwright.async_api import async_playwright
 
-# --- الآي دي الخاص بك كمالك رئيسي للبوت ---
+# --- الآي دي الخاص بك فقط كمالك رئيسي للبوت ---
 MASTER_ADMIN_ID = 6836512592 
 USERS_FILE = "allowed_users.json"
 
 active_tasks = {}
-account_history = {}
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -41,20 +40,18 @@ def save_users(users_list):
     except Exception as e:
         print(f"Error saving users: {e}")
 
-# --- إعداد خادم ويب وهمي لمنع انطفاء المنصة (Flask) ---
+# --- إعداد خادم ويب وهمي لمنع انطفاء المنصة ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "Instagram Ban Monitor Bot is Active!"
+    return "Bots are running and active!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host="0.0.0.0", port=port)
 
 threading.Thread(target=run_web_server, daemon=True).start()
-
-# --- أوامر التحكم للبوت ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -137,8 +134,6 @@ async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users_str = "\n".join([f"- `{uid}`" for uid in allowed_users])
     await update.message.reply_text(f"👥 **قائمة المستخدمين المسموح لهم:**\n{users_str}", parse_mode="Markdown")
 
-# --- محرك فحص حالة الحساب ---
-
 async def check_account_status(username):
     browser = None
     try:
@@ -150,7 +145,8 @@ async def check_account_status(username):
             
             user_agents = [
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15"
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15",
+                "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0"
             ]
             
             context = await browser.new_context(
@@ -168,7 +164,7 @@ async def check_account_status(username):
 
             await page.wait_for_timeout(4000)
             
-            # --- تنظيف لقطة الشاشة من أي إشعارات ---
+            # --- إخفاء النوافذ المنبثقة لتكون لقطة الشاشة نظيفة ---
             try:
                 await page.evaluate("""() => {
                     const dialogs = document.querySelectorAll("div[role='dialog']");
@@ -183,6 +179,7 @@ async def check_account_status(username):
             
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(1000)
+            # ---------------------------------------------------
             
             page_content = await page.content()
             page_text = await page.evaluate("() => document.body.innerText")
@@ -231,66 +228,15 @@ async def check_account_status(username):
                 pass
         return False, None, None
 
-# --- المراقبة وتنسيق الرسالة بأسلوب الصورة الشامل ---
-
 async def monitor_account_background(chat_id, username, context, initial_message):
     start_time = datetime.now()
+    await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت (مع تنظيف لقطة الشاشة)...\nسأنتظر حتى يفتح الحساب وسأرسل لك التقرير فوراً!")
     
-    # إجراء الفحص الفوري الأول عند كتابة /track
-    is_active, info, screenshot_path = await check_account_status(username)
-    
-    if is_active:
-        end_time = datetime.now()
-        duration = end_time - start_time
-        total_seconds = int(duration.total_seconds())
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        
-        desc = info.get("description", "لا توجد تفاصيل")
-        verified_badge = "✅ نعم (موثق)" if info.get("verified") else "❌ لا (غير موثق)"
-        
-        # التنسيق طبق الأصل من الصورة المرفقة
-        caption = (
-            f"🎉 تم فك البند عن الحساب أو أصبح موجوداً!\n"
-            f"___________________________\n\n"
-            f"👤 اليوزر: @{username}\n"
-            f"🔗 الرابط: https://instagram.com/{username}\n"
-            f"📊 التفاصيل: {desc}\n"
-            f"🏅 حالة التوثيق: {verified_badge}\n"
-            f"⏰ بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"🔒 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"⏱ مدة المراقبة: {hours} hours {minutes} minutes"
-        )
-        
-        keyboard = [[InlineKeyboardButton("🔄 فحص مرة أخرى", callback_data=f"refresh_{username}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        with open(screenshot_path, "rb") as photo:
-            await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                caption=caption,
-                reply_markup=reply_markup
-            )
-        
-        if os.path.exists(screenshot_path):
-            os.remove(screenshot_path)
-            
-        await initial_message.delete()
-        account_history[username] = "ACTIVE"
-    else:
-        await initial_message.edit_text(f"👀 بدأت مراقبة الحساب @{username} بصمت...\nسأنتظر حتى يفتح الحساب وسأرسل لك التقرير فوراً!")
-        account_history[username] = "BANNED"
-
-    # المراقبة الدائمة بالخلفية للتبنيد والفك
     while True:
         try:
-            await asyncio.sleep(random.randint(180, 300))
             is_active, info, screenshot_path = await check_account_status(username)
-            current_status = account_history.get(username, "ACTIVE")
-
-            # عند فك البند
-            if is_active and current_status == "BANNED":
+            
+            if is_active:
                 end_time = datetime.now()
                 duration = end_time - start_time
                 total_seconds = int(duration.total_seconds())
@@ -301,14 +247,14 @@ async def monitor_account_background(chat_id, username, context, initial_message
                 verified_badge = "✅ نعم (موثق)" if info.get("verified") else "❌ لا (غير موثق)"
                 
                 caption = (
-                    f"🎉 تم فك البند عن الحساب أو أصبح موجوداً!\n"
-                    f"___________________________\n\n"
+                    f"🎉 **تم فك البند عن الحساب أو أصبح موجوداً!**\n"
+                    f"━━━━━━━━━━━━━━━━━━━\n"
                     f"👤 اليوزر: @{username}\n"
                     f"🔗 الرابط: https://instagram.com/{username}\n"
                     f"📊 التفاصيل: {desc}\n"
                     f"🏅 حالة التوثيق: {verified_badge}\n"
-                    f"⏰ بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    f"🔒 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🕒 بدء المراقبة: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"🔓 وقت الظهور/الفتح: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"⏱ مدة المراقبة: {hours} hours {minutes} minutes"
                 )
                 
@@ -320,22 +266,18 @@ async def monitor_account_background(chat_id, username, context, initial_message
                         chat_id=chat_id,
                         photo=photo,
                         caption=caption,
+                        parse_mode="Markdown",
                         reply_markup=reply_markup
                     )
                 
                 if os.path.exists(screenshot_path):
                     os.remove(screenshot_path)
+                    
+                break
+            else:
+                sleep_time = random.randint(180, 300)
+                await asyncio.sleep(sleep_time)
                 
-                account_history[username] = "ACTIVE"
-
-            # عند التبنيد الجديد
-            elif not is_active and current_status == "ACTIVE":
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🚨 تنبيه عاجل!\n\nالحساب المراقَب @{username} تم إغلاقه أو تعرض للتبنيد/الحظر الآن! ❌"
-                )
-                account_history[username] = "BANNED"
-
         except asyncio.CancelledError:
             break
         except Exception:
@@ -355,7 +297,7 @@ async def track_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0].replace("@", "").strip()
     chat_id = update.effective_chat.id
     
-    status_message = await update.message.reply_text(f"🔍 جاري فحص الحساب @{username}...")
+    status_message = await update.message.reply_text(f"🔍 جاري إعداد مراقبة الحساب @{username}...")
     task = asyncio.create_task(monitor_account_background(chat_id, username, context, status_message))
     active_tasks[username] = task
 
@@ -398,7 +340,7 @@ def main():
     app.add_handler(CommandHandler("userslist", users_list))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    print("تم تشغيل البوت المحدث...")
+    print("تم تشغيل البوت بنجاح (مع تنظيف الصور وحماية تامة)...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
