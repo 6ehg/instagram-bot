@@ -149,9 +149,11 @@ async def check_account_status(username):
                 "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0"
             ]
             
+            # --- فرض الوضع الفاتح (Light Mode) بشكل دائم ---
             context = await browser.new_context(
                 viewport={"width": 1440, "height": 900},
-                user_agent=random.choice(user_agents)
+                user_agent=random.choice(user_agents),
+                color_scheme="light"
             )
             
             page = await context.new_page()
@@ -162,15 +164,20 @@ async def check_account_status(username):
                 await browser.close()
                 return False, None, None
 
-            await page.wait_for_timeout(4000)
+            await page.wait_for_timeout(3000)
             
-            # --- إخفاء النوافذ المنبثقة لتكون لقطة الشاشة نظيفة ---
+            # --- إخفاء النوافذ المنبثقة وفرض الخلفية البيضاء الواضحة ---
             try:
                 await page.evaluate("""() => {
+                    // إخفاء كافة الإعلانات والنوافذ المنبثقة
                     const dialogs = document.querySelectorAll("div[role='dialog']");
                     dialogs.forEach(el => el.style.display = 'none');
                     const backdrops = document.querySelectorAll("div._acaz, div[class*='x1s85apg']");
                     backdrops.forEach(el => el.style.display = 'none');
+                    
+                    // تحويل لون الخلفية للثيم الفاتح لضمان وضوح الصورة
+                    document.body.style.backgroundColor = '#ffffff';
+                    document.body.style.color = '#000000';
                     document.body.style.overflow = 'auto';
                     document.documentElement.style.overflow = 'auto';
                 }""")
@@ -178,7 +185,7 @@ async def check_account_status(username):
                 pass
             
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1500)
             # ---------------------------------------------------
             
             page_content = await page.content()
