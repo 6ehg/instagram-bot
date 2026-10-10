@@ -13,7 +13,7 @@ from telegram.ext import (
 from playwright.async_api import async_playwright
 
 # --- الآي دي الخاص بك المسموح له باستخدام البوتات ---
-ADMIN_USER_ID = [6836512592,7546855100]
+ADMIN_USER_ID =[6836512592,7546855100]
 
 # --- الـ sessionid الخاص بحسابك الوهمي لحل مشكلة الحسابات التي بها شرطة _ _ _
 INSTAGRAM_SESSION_ID = "29263544035%3A0QUHPGBO5GYkyZ%3A21%3AAYlR-Uys4WBY2g-mbfDCExjueB92HgSzHGtK0Qd53g"
