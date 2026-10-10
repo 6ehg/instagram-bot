@@ -14,12 +14,12 @@ from telegram.ext import (
 )
 from playwright.async_api import async_playwright
 
-# --- المالك الأساسي للبوت (لا يمكن حذفه) ---
+# --- الآي دي الخاص بك فقط كمالك رئيسي للبوت ---
 MASTER_ADMIN_ID = 6836512592 
 
 USERS_FILE = "allowed_users.json"
 
-# قاموس لتخزين المهام النشطة للتحكم بها
+# قاموس لتخزين المهام النشطة
 active_tasks = {}
 
 def load_users():
@@ -31,7 +31,8 @@ def load_users():
                     return data
         except Exception:
             pass
-    default_users = 6836512592
+    # الآي دي الخاص بك فقط كافتراضي
+    default_users = [MASTER_ADMIN_ID]
     save_users(default_users)
     return default_users
 
